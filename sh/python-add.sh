@@ -98,8 +98,6 @@ if [ -d "${PYENV_ROOT}" ]; then
   echo "🐍 Installing Python version(s): ${PYTHON_VERSIONS[*]}..."
   # Use login shell to ensure pyenv is initialized
   sudo -i -u "${USERNAME}" pyenv install --skip-existing ${PYTHON_VERSIONS[*]}
-  echo "-- Setting global Python to ${PYTHON_VERSIONS[0]}..."
-  # sudo -i -u "${USERNAME}" pyenv global ${PYTHON_VERSIONS[*]}
 fi
 
 echo "✅ Done! Installed pyenv and Python version(s) for '${USERNAME}'."

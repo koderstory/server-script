@@ -7,13 +7,17 @@ usage() {
 Usage: $0 -u USER -d DOMAIN -U DB_USER -n DB_NAME -p DB_PASS [-v PYTHON_VERSION] [-h]
 
 Options:
-  -u USER             OS user to own and run Odoo under (required)
-  -d DOMAIN           Domain name/directory (e.g. example.com) (required)
-  -U DB_USER          Database user (required)
+  -U USER             OS user to own and run Odoo under (required)
+  -D DOMAIN           Domain name/directory (e.g. example.com) (required)
+  -u DB_USER          Database user (required)
   -n DB_NAME          Database name (required)
   -p DB_PASS          Database password (required)
   -v PYTHON_VERSION   Python version for this directory (pyenv local). Defaults to pyenv global if omitted.
   -h                  Show this help message and exit.
+
+Example:
+  ./odoo.sh -U dev -D tes.domain.com -u user1 -n tes1 -p pass1 -v 3.11
+
 EOF
   exit 1
 }
@@ -38,14 +42,14 @@ while [ "$LONGPOLLING_PORT" = "$XMLRPC_PORT" ]; do
 
 # Parse options
 PYVER=
-while getopts ":u:d:U:n:p:v:h" opt; do
+while getopts ":U:D:u:n:p:v:h" opt; do
   case "$opt" in
-    u) USERNAME="$OPTARG" ;;  
-    d) DOMAIN="$OPTARG" ;;  
-    U) DB_USER="$OPTARG" ;;  
-    n) DB_NAME="$OPTARG" ;;  
-    p) DB_PASS="$OPTARG" ;;  
-    v) PYVER="$OPTARG" ;;  
+    U) USERNAME="$OPTARG" ;;
+    D) DOMAIN="$OPTARG" ;;
+    u) DB_USER="$OPTARG" ;;
+    n) DB_NAME="$OPTARG" ;;
+    p) DB_PASS="$OPTARG" ;;
+    v) PYVER="$OPTARG" ;;
     h) usage ;;
     *) usage ;;
   esac
@@ -53,7 +57,7 @@ done
 shift $((OPTIND-1))
 
 enforce_opts() {
-  if [ -z "${USERNAME:-}" ] || [ -z "${DOMAIN:-}" ] || [ -z "${DB_USER:-}" ] || [ -z "${DB_NAME:-}" ] || [ -z "${DB_PASS:-}" ]; then
+  if [ -z "${USERNAME:-}" ] || [ -z "${DOMAIN:-}" ] || [ -z "${DB_USER:-}" ] || [ -z "${DB_NAME:-}" ] || [ -z "${DB_PASS:-}" ] || [ -z "${PYVER:-}" ]; then
     usage
   fi
 }
@@ -69,16 +73,19 @@ DOMAIN_DIR="/home/$USERNAME/$DOMAIN"
 
 # Prepare directory
 echo "Creating directory $DOMAIN_DIR..."
-mkdir -p "$DOMAIN_DIR"
-chown "$USERNAME":"$USERNAME" "$DOMAIN_DIR"
+mkdir -p "$DOMAIN_DIR"/.venv
+chown -R "$USERNAME":"$USERNAME" "$DOMAIN_DIR"
 
 # Set python version locally if specified
-echo "Configuring Python version..."
-if [ -n "$PYVER" ]; then
-  sudo -i -u "$USERNAME" bash -lc "cd '$DOMAIN_DIR' && pyenv local '$PYVER'"
-else
-  echo "Using pyenv global python version"
-fi
+echo "Configuring Python version and pipenv"
+sudo -i -u "$USERNAME" bash -lc "/home/$USERNAME/.pyenv/shims/python3 -m pip install --upgrade pip pipenv  && cd $DOMAIN_DIR && /home/$USERNAME/.pyenv/shims/python3 -m pipenv --python $PYVER install "
+
+
+
+# Install Python requirements
+echo "Installing Python requirements..."
+sudo -i -u "$USERNAME" bash -lc "$DOMAIN_DIR/.venv/bin/python3 -m pip install -r /opt/odoo18-ce/requirements.txt"
+
 
 # Create odoo.conf before init/install
 CONF_FILE="$DOMAIN_DIR/odoo.conf"
@@ -87,10 +94,10 @@ cat <<EOF > "$CONF_FILE"
 [options]
 
 ; 1. Core Add-ons & Modules
-addons_path = /opt/odoo18-ce/odoo/addons,/opt/odoo18-ce/addons
+addons_path = /opt/odoo18-ce/odoo/addons,/opt/odoo18-ce/addons,/opt/odoo18-themes
 server_wide_modules = base,web
 import_partial =
-without_demo = False
+without_demo = True
 translate_modules = ['all']
 
 ; 2. Security & Access Control
@@ -127,7 +134,7 @@ x_sendfile = False
 pidfile =
 
 ; 5. Paths & Data Storage
-data_dir = /home/$USERNAME/.local/share/Odoo
+data_dir = $DOMAIN_DIR
 
 ; 6. Performance & Resource Limits
 workers = 0
@@ -137,14 +144,15 @@ limit_memory_hard_gevent = False
 limit_memory_soft = 2147483648
 limit_memory_soft_gevent = False
 limit_request = 65536
-limit_time_cpu = 60\limit_time_real = 120
+limit_time_cpu = 60
+limit_time_real = 120
 limit_time_real_cron = -1
 limit_time_worker_cron = 0
 osv_memory_count_limit = 0
 transient_age_limit = 1.0
 
 ; 7. Logging & Reporting
-logfile =
+logfile = $DOMAIN_DIR/logs/odoo.log
 log_level = info
 log_handler = :INFO
 syslog = False
@@ -182,13 +190,11 @@ EOF
 chown "$USERNAME":"$USERNAME" "$CONF_FILE"
 chmod 640 "$CONF_FILE"
 
-# Install Python requirements
-echo "Installing Python requirements..."
-sudo -i -u "$USERNAME" bash -lc "cd '$DOMAIN_DIR' && pip install -r /opt/odoo18-ce/requirements.txt"
-
 # Initialize database
 echo "Initializing Odoo database (base module)..."
-sudo -i -u "$USERNAME" bash -lc "cd '$DOMAIN_DIR' && /opt/odoo18-ce/odoo-bin -c odoo.conf -i base --stop-after-init"
+sudo -i -u "$USERNAME" bash -lc "$DOMAIN_DIR/.venv/bin/python3  /opt/odoo18-ce/odoo-bin -c $DOMAIN_DIR/odoo.conf -i base --stop-after-init"
+
+
 
 # Create systemd service
 SERVICE_NAME="odoo_${DOMAIN}"
@@ -202,8 +208,8 @@ After=network.target
 [Service]
 User=${USERNAME}
 Group=${USERNAME}
-WorkingDirectory=$DOMAIN_DIR
-ExecStart=/bin/bash -lc 'cd "$DOMAIN_DIR" && /opt/odoo18-ce/odoo-bin -c "$CONF_FILE"'
+WorkingDirectory=/opt/odoo18-ce
+ExecStart="$DOMAIN_DIR"/.venv/bin/python3 /opt/odoo18-ce/odoo-bin -c "$CONF_FILE"
 Restart=on-failure
 KillMode=process
 
@@ -216,6 +222,7 @@ echo "Reloading systemd, enabling and starting $SERVICE_NAME..."
 systemctl daemon-reload
 systemctl enable --now "$SERVICE_NAME"
 
+
 # Configure Nginx
 NGINX_CONF="/etc/nginx/sites-available/${DOMAIN}"
 echo "Creating nginx config $NGINX_CONF..."
@@ -225,8 +232,8 @@ server {
     server_name ${DOMAIN};
 
     client_max_body_size 200M;
-    access_log /var/log/nginx/${DOMAIN}.access.log;
-    error_log  /var/log/nginx/${DOMAIN}.error.log;
+    access_log ${DOMAIN_DIR}/logs/nginx.access.log;
+    error_log  ${DOMAIN_DIR}/logs/nginx.error.log;
 
     location / {
         proxy_pass         http://127.0.0.1:${XMLRPC_PORT};

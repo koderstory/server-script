@@ -151,6 +151,8 @@ rm /tmp/wkhtmltox.deb
 print_green ">>> Cloning Odoo 18.0 CE and installing Python requirements..."
 ODOO_REPO="https://github.com/odoo/odoo.git"
 git clone -b "18.0" --single-branch --depth 1 "$ODOO_REPO" /opt/odoo18-ce
+git clone -b "18.0" https://github.com/odoo/design-themes.git /opt/odoo18-themes
+
 
 # # -------------------------------------------------------------------
 # # 15. Symlink odoo-bin into PATH
