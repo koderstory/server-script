@@ -72,24 +72,35 @@ fi
 DOMAIN_DIR="/home/$USERNAME/$DOMAIN"
 
 # Prepare directory
+echo "===================================="
 echo "Creating directory $DOMAIN_DIR..."
+echo "===================================="
 mkdir -p "$DOMAIN_DIR"/.venv
 chown -R "$USERNAME":"$USERNAME" "$DOMAIN_DIR"
 
-# Set python version locally if specified
-echo "Configuring Python version and pipenv"
-sudo -i -u "$USERNAME" bash -lc "/home/$USERNAME/.pyenv/shims/python3 -m pip install --upgrade pip pipenv  && cd $DOMAIN_DIR && /home/$USERNAME/.pyenv/shims/python3 -m pipenv --python $PYVER install "
 
+
+# Set python version locally if specified
+echo "===================================="
+echo "Configuring Python version and pipenv"
+echo "===================================="
+sudo -i -u "$USERNAME" bash -lc "python3 -m pip install --upgrade pip pipenv  && cd $DOMAIN_DIR && python3 -m pipenv --python $PYVER install "
 
 
 # Install Python requirements
+
+echo "===================================="
 echo "Installing Python requirements..."
-sudo -i -u "$USERNAME" bash -lc "$DOMAIN_DIR/.venv/bin/python3 -m pip install -r /opt/odoo18-ce/requirements.txt"
+echo "===================================="
+sudo -i -u "$USERNAME" bash -lc "cd $DOMAIN_DIR && $DOMAIN_DIR/.venv/bin/python3 -m pip install -r /opt/odoo18-ce/requirements.txt"
+
 
 
 # Create odoo.conf before init/install
 CONF_FILE="$DOMAIN_DIR/odoo.conf"
+echo "===================================="
 echo "Generating Odoo config at $CONF_FILE..."
+echo "===================================="
 cat <<EOF > "$CONF_FILE"
 [options]
 
@@ -191,10 +202,10 @@ chown "$USERNAME":"$USERNAME" "$CONF_FILE"
 chmod 640 "$CONF_FILE"
 
 # Initialize database
+echo "===================================="
 echo "Initializing Odoo database (base module)..."
+echo "===================================="
 sudo -i -u "$USERNAME" bash -lc "$DOMAIN_DIR/.venv/bin/python3  /opt/odoo18-ce/odoo-bin -c $DOMAIN_DIR/odoo.conf -i base --stop-after-init"
-
-
 
 # Create systemd service
 SERVICE_NAME="odoo_${DOMAIN}"
