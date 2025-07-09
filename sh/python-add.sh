@@ -19,11 +19,11 @@ EOF
 # Parse CLI options
 SET_GLOBAL=0
 declare -a PYTHON_VERSIONS=()
-while getopts ":u:v:oh" opt; do
+while getopts ":u:v:G" opt; do
   case "${opt}" in
     u) USERNAME="${OPTARG}" ;;
     v) PYTHON_VERSIONS+=("${OPTARG}") ;;
-    o) SET_GLOBAL=1 ;;
+    G) SET_GLOBAL=1 ;;
     *) usage ;;
   esac
 done
