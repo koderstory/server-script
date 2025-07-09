@@ -6,7 +6,7 @@ IFS=$'\n\t'
 to_lower() { echo "$1" | tr '[:upper:]' '[:lower:]'; }
 usage() {
   cat <<EOF
-Usage: $0 -u USERNAME -v PYTHON_VERSION [-v PYTHON_VERSION ...] [-o] [-h]
+Usage: $0 -u USERNAME -v PYTHON_VERSION [-v PYTHON_VERSION ...] [-G] [-h]
 
 Options:
   -u USERNAME         User to install pyenv for (required)
@@ -49,23 +49,39 @@ apt-get install -y --no-install-recommends \
   libffi-dev liblzma-dev
 
 # Install pyenv if needed
-echo "🚀 Installing pyenv into ${PYENV_ROOT}..."
-sudo -i -u "$USERNAME" bash -lc "curl https://pyenv.run | bash"
+if [ ! -d "${PYENV_ROOT}" ]; then
+  echo "🚀 Installing pyenv into ${PYENV_ROOT}..."
+  sudo -i -u "$USERNAME" bash -lc "curl https://pyenv.run | bash"
+else
+  echo "⏭ ${PYENV_ROOT} already exists; skipping pyenv install."
+fi
 
 # Configure ~/.bash_profile for pyenv initialization
 echo "⚙️  Configuring ~/.bash_profile for ${USERNAME}..."
-sudo -u "${USERNAME}" -H bash -lc 'cat >> "$HOME/.bash_profile" << "EOF"
-export PYENV_ROOT="$HOME/.pyenv"
-export PATH="$PYENV_ROOT/bin:$PATH"
-if command -v pyenv 1>/dev/null 2>&1; then
-  eval "$(pyenv init --path)"
-  eval "$(pyenv init -)"
+echo "[DEBUG] Testing: -d ${USER_HOME}"
+PROFILE="${USER_HOME}/.bash_profile"
+PATTERN='export PYENV_ROOT="'"${USER_HOME}"'/.pyenv"'
+
+if [ -f "$PROFILE" ] && grep -Fq "$PATTERN" "$PROFILE"; then
+  echo "⏭️  pyenv already configured in $PROFILE, skipping."
+else
+  # append the whole block
+  cat <<EOF | sudo -u "${USERNAME}" tee -a "$PROFILE" >/dev/null
+export PYENV_ROOT="${USER_HOME}/.pyenv"
+export PATH="\$PYENV_ROOT/bin:\$PATH"
+if command -v pyenv >/dev/null 2>&1; then
+  eval "\$(pyenv init --path)"
+  eval "\$(pyenv init -)"
 fi
 if [ -f ~/.bashrc ]; then
   source ~/.bashrc
 fi
 # End pyenv configuration
-EOF'
+EOF
+  echo "✅ Appended pyenv initialization to $PROFILE"
+fi
+echo "[DEBUG] Testing: -d ${USER_HOME}"
+
 
 # Install specified Python versions in one go and set global
 if [ -d "${PYENV_ROOT}" ]; then
@@ -80,17 +96,16 @@ if [ -d "${PYENV_ROOT}" ]; then
   # Figure out what pyenv currently has as the global version
   CURRENT_GLOBAL=$(sudo -i -u "${USERNAME}" bash -lc 'pyenv global')
 
-  # If it's just "system", or if -o was passed, set to our new versions
+  # If it's just "system", or if -G was passed, set to our new versions
   if [[ "${CURRENT_GLOBAL}" =~ (^| )system($| ) ]]; then
     echo "🌐 Global was 'system'—switching to: ${PYTHON_VERSIONS[*]}..."
     sudo -i -u "${USERNAME}" bash -lc "pyenv global ${PYTHON_VERSIONS[*]}"
   elif [ "${SET_GLOBAL}" -eq 1 ]; then
-    echo "🌐 -o passed—setting global to: ${PYTHON_VERSIONS[*]}..."
+    echo "🌐 -G passed—setting global to: ${PYTHON_VERSIONS[*]}..."
     sudo -i -u "${USERNAME}" bash -lc "pyenv global ${PYTHON_VERSIONS[*]}"
   else
     echo "ℹ️  Leaving global version(s) as: ${CURRENT_GLOBAL}"
   fi
-
 fi
 
 echo "✅ Done! Installed pyenv and Python version(s) for '${USERNAME}'."
