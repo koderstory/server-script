@@ -105,7 +105,7 @@ cat <<EOF > "$CONF_FILE"
 [options]
 
 ; 1. Core Add-ons & Modules
-addons_path = /opt/odoo18-ce/odoo/addons,/opt/odoo18-ce/addons,/opt/odoo18-themes
+addons_path = /opt/odoo/odoo18-ce/odoo/addons,/opt/odoo/odoo18-ce/addons,/opt/odoo/odoo18-themes
 server_wide_modules = base,web
 import_partial =
 without_demo = True
