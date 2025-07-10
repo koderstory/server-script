@@ -92,7 +92,7 @@ sudo -i -u "$USERNAME" bash -lc "python3 -m pip install --upgrade pip pipenv  &&
 echo "===================================="
 echo "Installing Python requirements..."
 echo "===================================="
-sudo -i -u "$USERNAME" bash -lc "cd $DOMAIN_DIR && $DOMAIN_DIR/.venv/bin/python3 -m pip install -r /opt/odoo18-ce/requirements.txt"
+sudo -i -u "$USERNAME" bash -lc "cd $DOMAIN_DIR && $DOMAIN_DIR/.venv/bin/python3 -m pip install -r /opt/odoo/odoo18-ce/requirements.txt"
 
 
 
