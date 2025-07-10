@@ -205,7 +205,7 @@ chmod 640 "$CONF_FILE"
 echo "===================================="
 echo "Initializing Odoo database (base module)..."
 echo "===================================="
-sudo -i -u "$USERNAME" bash -lc "$DOMAIN_DIR/.venv/bin/python3  /opt/odoo18-ce/odoo-bin -c $DOMAIN_DIR/odoo.conf -i base --stop-after-init"
+sudo -i -u "$USERNAME" bash -lc "$DOMAIN_DIR/.venv/bin/python3  /opt/odoo/odoo18-ce/odoo-bin -c $DOMAIN_DIR/odoo.conf -i base --stop-after-init"
 
 # Create systemd service
 SERVICE_NAME="odoo_${DOMAIN}"
@@ -219,8 +219,8 @@ After=network.target
 [Service]
 User=${USERNAME}
 Group=${USERNAME}
-WorkingDirectory=/opt/odoo18-ce
-ExecStart="$DOMAIN_DIR"/.venv/bin/python3 /opt/odoo18-ce/odoo-bin -c "$CONF_FILE"
+WorkingDirectory=/opt/odoo/odoo18-ce
+ExecStart="$DOMAIN_DIR"/.venv/bin/python3 /opt/odoo/odoo18-ce/odoo-bin -c "$CONF_FILE"
 Restart=on-failure
 KillMode=process
 
