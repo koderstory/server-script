@@ -75,8 +75,8 @@ done
 
 # 6) Drop & recreate DB & role
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEL_SCRIPT="$SCRIPT_DIR/db-add.sh"
-DB_SCRIPT="$SCRIPT_DIR/db-del.sh"
+DEL_SCRIPT="$SCRIPT_DIR/db-del.sh"
+DB_SCRIPT="$SCRIPT_DIR/db-add.sh"
 
 for f in "$DEL_SCRIPT" "$DB_SCRIPT"; do
   [[ -x "$f" ]] || { echo "ERROR: Cannot execute $f"; exit 1; }
