@@ -215,6 +215,12 @@ chown -R "${DEV_USER}:${DEV_USER}" "${TARGET_DIR}" || true
 
 ok "odoo.conf created at ${TARGET_DIR}/odoo.conf"
 
+# ---------- initialize Odoo database (non-interactive) ----------
+step "Initialize Odoo database (base,web)"
+as_dev "cd ~/${PROJECT_DIR} && export PATH=\"\$HOME/.local/bin:\$PATH\"; \
+  PIPENV_VENV_IN_PROJECT=1 pipenv run /opt/odoo/18/ce/odoo-bin -c odoo.conf -i base,web --stop-after-init"
+ok "Odoo init completed"
+
 
 
 # ---------- summary ----------
