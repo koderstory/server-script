@@ -148,17 +148,51 @@ rm /tmp/wkhtmltox.deb
 # -------------------------------------------------------------------
 # 14. Clone Odoo Community Edition & install Python requirements
 # -------------------------------------------------------------------
-print_green ">>> Cloning Odoo 18.0 CE and installing Python requirements..."
-ODOO_REPO="https://github.com/odoo/odoo.git"
-git clone -b "18.0" --single-branch --depth 1 "$ODOO_REPO" /opt/odoo/odoo18-ce
-git clone -b "18.0" https://github.com/odoo/design-themes.git /opt/odoo/odoo18-themes
+odoo18_path() {
+  # detect common Odoo 18 install dirs; echo the first match
+  local candidates=(
+    "/opt/odoo/18"
+    "/opt/odoo18"
+    "/opt/odoo/odoo18"
+    "/odoo/18.0"
+    "/odoo/18"
+    "./odoo-18.0"
+    "./odoo18"
+  )
+  for d in "${candidates[@]}"; do
+    if [[ -d "$d" ]]; then
+      echo "$d"
+      return 0
+    fi
+  done
+  return 1
+}
 
+ODOO_FOUND="$(odoo18_path || true)"
+if [[ -n "${ODOO_FOUND}" ]]; then
+  echo "==> Odoo 18 detected at '${ODOO_FOUND}' — skipping ./setup-server.sh"
+else
+  print_green ">>> Cloning Odoo 18.0 CE and installing Python requirements..."
+  git clone -b "18.0" --single-branch --depth 1 https://github.com/odoo/odoo.git /opt/odoo/18/ce
+  git clone -b "18.0" https://github.com/odoo/design-themes.git /opt/odoo/18/themes
+  git clone -b "18.0" https://github.com/OCA/web.git /opt/odoo/18/oca-web
+  git clone -b "18.0" https://github.com/OCA/server-brand.git /opt/odoo/18/oca-serverbrand
+  git clone -b "18.0" https://github.com/OCA/website.git /opt/odoo/18/oca-website
+  git clone -b "18.0" https://github.com/OCA/manufacture.git /opt/odoo/18/oca-mrp
+  git clone -b "18.0" https://github.com/OCA/product-attribute.git /opt/odoo/18/oca-productattribute
+  git clone -b "18.0" https://github.com/OCA/project.git /opt/odoo/18/oca-project
+  git clone -b "18.0" https://github.com/OCA/server-tools.git /opt/odoo/18/oca-servertools
+  git clone -b "18.0" https://github.com/OCA/crm.git /opt/odoo/18/oca-crm
+  git clone -b "18.0" https://github.com/OCA/queue.git /opt/odoo/18/oca-queue
+  git clone -b "18.0" https://github.com/OCA/e-commerce.git /opt/odoo/18/oca-ecommerce
+  git clone -b "18.0" https://github.com/OCA/knowledge.git /opt/odoo/18/oca-knowledge
+fi
 
 # # -------------------------------------------------------------------
 # # 15. Symlink odoo-bin into PATH
 # # -------------------------------------------------------------------
 # print_green ">>> Creating symlink for odoo-bin into /usr/local/bin..."
-# ln -sf /opt/odoo-ce/odoo-bin /usr/local/bin/odoo-bin
+# ln -sf /opt/odoo/18/ce/odoo-bin /usr/local/bin/odoo-bin
 
 # -------------------------------------------------------------------
 # All done
