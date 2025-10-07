@@ -18,50 +18,53 @@ DOMAIN_RAW="$1"
 DEV_USER_RAW="$2"
 
 # --- helpers ---
-to_id() {
-  # lowercase, replace non-alnum with underscores, collapse repeats, trim underscores
+to_key() {
+  # lowercase and strip non [a-z0-9]
   local s
-  s="$(echo -n "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/_/g; s/_+/_/g; s/^_+|_+$//g')"
+  s="$(echo -n "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]//g')"
   printf "%s" "$s"
 }
 
 gen_passphrase() {
-  # Prefer a 16-word passphrase from system dictionary; fallback to urandom
-  if command -v shuf >/dev/null 2>&1 && [[ -r /usr/share/dict/words ]]; then
-    # restrict to simple lowercase words to avoid punctuation/uppercase
-    tr '[:upper:]' '[:lower:]' </usr/share/dict/words \
-      | grep -E '^[a-z]{3,10}$' \
-      | shuf -n 16 \
-      | paste -sd'-' -
+  # 10-char random token from [A-Za-z0-9#!%]
+  # Works under `set -euo pipefail` (ignore SIGPIPE from head).
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -base64 32 \
+      | LC_ALL=C tr -dc 'A-Za-z0-9#!%' \
+      | head -c 16 || true
   else
-    # fallback: 48 random bytes base64, chunked into 16 "words"
-    head -c 48 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' \
-      | fold -w6 | head -n16 | paste -sd'-' -
+    LC_ALL=C tr -dc 'A-Za-z0-9#!%' </dev/urandom \
+      | head -c 16 || true
+  fi
+  echo
+}
+
+rand_suffix() {
+  if command -v hexdump >/dev/null 2>&1; then
+    hexdump -n 4 -v -e '/1 "%02x"' /dev/urandom
+  else
+    # fallback if hexdump isn't available
+    od -An -N4 -tx1 /dev/urandom | tr -d ' \n'
   fi
 }
 
-# Execute in current working directory with the faked environment
-( ./server.sh )
-
 
 # --- normalize inputs ---
-DOMAIN="$(to_id "$DOMAIN_RAW")"
-DEV_USER="$(to_id "$DEV_USER_RAW")"
+DOMAIN="$(to_key "$DOMAIN_RAW")"                   # example.com -> examplecom
+DEV_USER="$(echo -n "$DEV_USER_RAW" | tr '[:upper:]' '[:lower:]')"
 
-DB_USER="${DEV_USER}_${DOMAIN}"   # e.g. newuser_example_com
-DB_NAME="db_${DOMAIN}"            # e.g. db_example_com
+
+SUFFIX="$(rand_suffix)"
+
+DB_USER="u_${DOMAIN}_${SUFFIX}"                    # u_examplecom_x1y2z3
+DB_NAME="db_${DOMAIN}_${SUFFIX}"                   # db_examplecom_x1y2z3
 DB_PASS="$(gen_passphrase)"
 
 # --- sanity checks ---
-[[ -x ./server.sh ]] || { echo "Error: ./server.sh not found or not executable in $(pwd)"; exit 1; }
-[[ -x ./db_add.sh        ]] || { echo "Error: ./db_add.sh not found or not executable at ./db_add.sh"; exit 1; }
+[[ -x ./setup-server.sh ]] || { echo "Error: ./setup-server.sh not found or not executable in $(pwd)"; exit 1; }
+[[ -x ./db_add.sh       ]] || { echo "Error: ./db_add.sh not found or not executable at ./db_add.sh"; exit 1; }
 
-echo "==> Inputs"
-echo " Domain:        ${DOMAIN_RAW}  -> ${DOMAIN}"
-echo " Dev user:      ${DEV_USER_RAW} -> ${DEV_USER}"
-echo " DB user:       ${DB_USER}"
-echo " DB name:       ${DB_NAME}"
-echo " (password will not be echoed again)"
+( ./setup-server.sh )
 
 # --- create unix user if needed ---
 if id -u "$DEV_USER" >/dev/null 2>&1; then
@@ -71,16 +74,14 @@ else
   adduser --gecos "" --disabled-password "$DEV_USER"
 fi
 
-# --- run server.sh "as if" we were the dev user (no user switch) ---
-# We simulate environment variables the script might expect from the dev user.
-echo "==> Running ./server.sh with ${DEV_USER}-like environment (no user switch)"
+
+# --- run setup-server.sh "as if" we were the dev user (no user switch) ---
 export USER="$DEV_USER"
 export LOGNAME="$DEV_USER"
 export HOME="/home/${DEV_USER}"
 export SHELL="/bin/bash"
 umask 022
 
-# If server.sh relies on HOME, ensure it exists
 if [[ ! -d "$HOME" ]]; then
   echo "Warning: HOME directory '$HOME' does not exist; creating."
   mkdir -p "$HOME"
@@ -89,25 +90,22 @@ fi
 
 # --- configure database via ./db_add.sh ---
 echo "==> Configuring database via ./db_add.sh"
-# Note: We do not echo the password.
-# ./db_add.sh expects: /db_add.sh user_domain_com db_domain_com 16word-random-pass
+# ./db_add.sh expects: ./db_add.sh user_domain_com db_domain_com 16word-random-pass
 ./db_add.sh "${DB_USER}" "${DB_NAME}" "${DB_PASS}"
 
-# --- output summary (without password) ---
+# --- output summary (password shown) ---
 cat <<EOF
 
 ✅ Done.
 
 Summary:
 - Unix user:     ${DEV_USER} (created if missing)
-- Ran:           ./server.sh (with USER=${DEV_USER}, HOME=/home/${DEV_USER})
+- Ran:           $( [[ -n "${ODOO_FOUND}" ]] && echo "skipped setup-server.sh (Odoo 18 present)" || echo "setup-server.sh (with USER=${DEV_USER}, HOME=/home/${DEV_USER})" )
 - DB user:       ${DB_USER}
 - DB name:       ${DB_NAME}
-- DB password:   (generated, not displayed)
+- DB password:   ${DB_PASS}
 
-Tip: store the password securely (e.g., a secret manager). If you need it now, re-run with:
-  PASS="\$( $(basename "$0") ${DOMAIN_RAW@Q} ${DEV_USER_RAW@Q} --print-pass )"
-
+Store the password securely (e.g., a secret manager).
 EOF
 
 # Optional: support a hidden flag to print just the password if invoked that way
