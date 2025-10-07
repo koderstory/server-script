@@ -21,8 +21,8 @@ if [[ $# -ne 5 ]]; then
 fi
 
 # Assign positional arguments
-domain="$2"
 linux_user="$1"
+domain="$2"
 db_user="$3"
 db_name="$4"
 db_pass="$5"
@@ -45,11 +45,11 @@ get_free_port() {
   done
 }
 
-# Acquire two distinct free ports for XML-RPC and longpolling
-XMLRPC_PORT=$(get_free_port)
-LONGPOLLING_PORT=$(get_free_port)
-if [[ "$LONGPOLLING_PORT" == "$XMLRPC_PORT" ]]; then
-  LONGPOLLING_PORT=$(get_free_port)
+# Allocate distinct ports for HTTP and gevent (longpolling)
+HTTP_PORT=$(get_free_port)
+GEVENT_PORT=$(get_free_port)
+if [[ "$GEVENT_PORT" == "$HTTP_PORT" ]]; then
+  GEVENT_PORT=$(get_free_port)
 fi
 
 # Generate the Odoo configuration file
@@ -58,9 +58,9 @@ cat > "$OUTPUT_FILE" <<EOF
 
 ; 1. Core Add-ons & Modules
 addons_path = /opt/odoo18-ce/odoo/addons,/opt/odoo18-ce/addons
-server_wide_modules = base,web
+server_wide_modules = base,web,queue_job
 import_partial =
-without_demo = False
+without_demo = True
 translate_modules = ['all']
 
 ; 2. Security & Access Control
@@ -86,10 +86,8 @@ list_db = True
 ; 4. Server & Protocol Interfaces
 http_enable = True
 http_interface =
-http_port = 8069
-gevent_port = 8072
-xmlrpc_port = $XMLRPC_PORT
-longpolling_port = $LONGPOLLING_PORT
+http_port = $HTTP_PORT
+gevent_port = $GEVENT_PORT
 websocket_keep_alive_timeout = 3600
 websocket_rate_limit_burst = 10
 websocket_rate_limit_delay = 0.2
@@ -97,10 +95,11 @@ x_sendfile = False
 pidfile =
 
 ; 5. Paths & Data Storage
-data_dir = /home/dev/.local/share/Odoo
+data_dir = /home/${linux_user}/.local/share/Odoo
 
 ; 6. Performance & Resource Limits
-workers = 0
+; NOTE: queue_job requires workers > 0 to process jobs.
+workers = 2
 max_cron_threads = 2
 limit_memory_hard = 2684354560
 limit_memory_hard_gevent = False
@@ -147,6 +146,12 @@ test_file =
 test_tags = None
 pre_upgrade_scripts =
 upgrade_path =
+
+; 11. Queue Job (OCA)
+; - server_wide_modules above loads queue_job so workers can execute jobs
+; - tweak channel sizing to your workload. Format: name:count entries, comma-separated.
+[queue_job]
+channels = root:2,default:2,mail:1
 EOF
 
 # Final message
@@ -154,4 +159,4 @@ echo "Generated Odoo config at $OUTPUT_FILE"
 echo "  Domain:     $domain"
 echo "  Linux User: $linux_user"
 echo "  DB:         $db_name (@$db_user)"
-echo "  Ports:      xmlrpc=$XMLRPC_PORT, longpolling=$LONGPOLLING_PORT"
+echo "  Ports:      http=$HTTP_PORT, gevent=$GEVENT_PORT"
