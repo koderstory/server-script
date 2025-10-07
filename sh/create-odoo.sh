@@ -1,81 +1,134 @@
 #!/usr/bin/env bash
 # setup.sh — run as root
-# Usage: ./setup.sh <domain> <user>
+# Usage: ./setup.sh [--no-color] <domain> <user>
 
 set -euo pipefail
 
-if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
-  echo "This script must be run as root." >&2
-  exit 1
-fi
+# ---------- arg parsing ----------
+NO_COLOR_FLAG=0
+ARGS=()
+for a in "$@"; do
+  case "$a" in
+    --no-color) NO_COLOR_FLAG=1 ;;
+    *) ARGS+=("$a") ;;
+  esac
+done
+set -- "${ARGS[@]}"
 
 if [[ $# -ne 2 ]]; then
-  echo "Usage: $0 <domain> <user>" >&2
+  echo "Usage: $0 [--no-color] <domain> <user>" >&2
   exit 1
 fi
 
 DOMAIN_RAW="$1"
 DEV_USER_RAW="$2"
 
-# --- helpers ---
+# ---------- color detection ----------
+supports_color() {
+  [[ -t 1 ]] || return 1
+  command -v tput >/dev/null 2>&1 || return 1
+  local n; n=$(tput colors || echo 0)
+  [[ "$n" -ge 8 ]] || return 1
+  [[ "${NO_COLOR:-}" == "" ]] || return 1
+  [[ "$NO_COLOR_FLAG" -eq 0 ]] || return 1
+  return 0
+}
+
+if supports_color; then
+  BOLD="$(tput bold)"; DIM="$(tput dim)"; RESET="$(tput sgr0)"
+  RED="$(tput setaf 1)"; GREEN="$(tput setaf 2)"; YELLOW="$(tput setaf 3)"
+  BLUE="$(tput setaf 4)"; CYAN="$(tput setaf 6)"
+else
+  BOLD=""; DIM=""; RESET=""
+  RED=""; GREEN=""; YELLOW=""; BLUE=""; CYAN=""
+fi
+
+info()  { printf "%s[*]%s %s\n" "$CYAN" "$RESET" "$*"; }
+step()  { printf "\n%s==>%s %s%s%s\n" "$BLUE" "$RESET" "$BOLD" "$*" "$RESET"; }
+ok()    { printf "%s[✓]%s %s\n" "$GREEN" "$RESET" "$*"; }
+warn()  { printf "%s[!]%s %s\n" "$YELLOW" "$RESET" "$*"; }
+err()   { printf "%s[x]%s %s\n" "$RED" "$RESET" "$*" >&2; }
+
+trap 'err "Script failed on line $LINENO."' ERR
+
+# ---------- guards ----------
+if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
+  err "This script must be run as root."
+  exit 1
+fi
+
+# ---------- helpers ----------
 to_key() {
   # lowercase and strip non [a-z0-9]
   local s
-  s="$(echo -n "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]//g')"
+  s="$(printf "%s" "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]//g')"
   printf "%s" "$s"
 }
 
 gen_passphrase() {
-  # 10-char random token from [A-Za-z0-9#!%]
-  # Works under `set -euo pipefail` (ignore SIGPIPE from head).
+  # 10-char token from [A-Za-z0-9#!%], robust under set -euo pipefail
   if command -v openssl >/dev/null 2>&1; then
     openssl rand -base64 32 \
       | LC_ALL=C tr -dc 'A-Za-z0-9#!%' \
-      | head -c 16 || true
+      | head -c 10 || true
   else
     LC_ALL=C tr -dc 'A-Za-z0-9#!%' </dev/urandom \
-      | head -c 16 || true
+      | head -c 10 || true
   fi
   echo
 }
 
 rand_suffix() {
+  # 8 hex chars; no SIGPIPE issues
   if command -v hexdump >/dev/null 2>&1; then
     hexdump -n 4 -v -e '/1 "%02x"' /dev/urandom
   else
-    # fallback if hexdump isn't available
     od -An -N4 -tx1 /dev/urandom | tr -d ' \n'
   fi
 }
 
+kv() {
+  # pretty key: value (aligned)
+  # usage: kv "Key" "Value"
+  printf "  %-12s : %s\n" "$1" "$2"
+}
 
-# --- normalize inputs ---
-DOMAIN="$(to_key "$DOMAIN_RAW")"                   # example.com -> examplecom
-DEV_USER="$(echo -n "$DEV_USER_RAW" | tr '[:upper:]' '[:lower:]')"
-
-
+# ---------- normalize inputs ----------
+DOMAIN="$(to_key "$DOMAIN_RAW")"               # example.com -> examplecom
+DEV_USER="$(printf "%s" "$DEV_USER_RAW" | tr '[:upper:]' '[:lower:]')"
 SUFFIX="$(rand_suffix)"
 
-DB_USER="u_${DOMAIN}_${SUFFIX}"                    # u_examplecom_x1y2z3
-DB_NAME="db_${DOMAIN}_${SUFFIX}"                   # db_examplecom_x1y2z3
+DB_USER="u_${DOMAIN}_${SUFFIX}"                # u_examplecom_1a2b3c4d
+DB_NAME="db_${DOMAIN}_${SUFFIX}"               # db_examplecom_1a2b3c4d
 DB_PASS="$(gen_passphrase)"
 
-# --- sanity checks ---
-[[ -x ./setup-server.sh ]] || { echo "Error: ./setup-server.sh not found or not executable in $(pwd)"; exit 1; }
-[[ -x ./db_add.sh       ]] || { echo "Error: ./db_add.sh not found or not executable at ./db_add.sh"; exit 1; }
+# ---------- sanity checks ----------
+step "Sanity checks"
+[[ -x ./setup-server.sh ]] || { err "setup-server.sh not found or not executable in $(pwd)"; exit 1; }
+[[ -x ./db_add.sh       ]] || { err "db_add.sh not found or not executable at ./db_add.sh"; exit 1; }
+ok "Found ./setup-server.sh"
+ok "Found ./db_add.sh"
 
-( ./setup-server.sh )
+# ---------- show inputs ----------
+step "Inputs"
+kv "Domain (raw)" "$DOMAIN_RAW"
+kv "Domain (key)" "$DOMAIN"
+kv "Dev user"     "$DEV_USER"
+kv "DB user"      "$DB_USER"
+kv "DB name"      "$DB_NAME"
 
-# --- create unix user if needed ---
+# ---------- create unix user if needed ----------
+step "Ensure Unix user"
 if id -u "$DEV_USER" >/dev/null 2>&1; then
-  echo "==> User '${DEV_USER}' already exists; skipping adduser"
+  ok "User '${DEV_USER}' already exists"
 else
-  echo "==> Creating user '${DEV_USER}' (disabled password, empty GECOS)"
+  info "Creating user '${DEV_USER}' (disabled password, empty GECOS)"
   adduser --gecos "" --disabled-password "$DEV_USER"
+  ok "Created '${DEV_USER}'"
 fi
 
-
-# --- run setup-server.sh "as if" we were the dev user (no user switch) ---
+# ---------- run setup-server.sh with dev-like env (no user switch) ----------
+step "Run setup-server.sh (dev-like env)"
 export USER="$DEV_USER"
 export LOGNAME="$DEV_USER"
 export HOME="/home/${DEV_USER}"
@@ -83,32 +136,36 @@ export SHELL="/bin/bash"
 umask 022
 
 if [[ ! -d "$HOME" ]]; then
-  echo "Warning: HOME directory '$HOME' does not exist; creating."
+  warn "HOME directory '$HOME' does not exist; creating."
   mkdir -p "$HOME"
   chown "${DEV_USER}:${DEV_USER}" "$HOME" || true
+  ok "Created $HOME"
 fi
 
-# --- configure database via ./db_add.sh ---
-echo "==> Configuring database via ./db_add.sh"
-# ./db_add.sh expects: ./db_add.sh user_domain_com db_domain_com 16word-random-pass
+( ./setup-server.sh )
+ok "setup-server.sh completed"
+
+# ---------- configure database ----------
+step "Configure database"
+info "Calling: ./db_add.sh ${DB_USER} ${DB_NAME} **********"
 ./db_add.sh "${DB_USER}" "${DB_NAME}" "${DB_PASS}"
+ok "Database configured"
 
-# --- output summary (password shown) ---
-cat <<EOF
-
-✅ Done.
-
-Summary:
-- Unix user:     ${DEV_USER} (created if missing)
-- Ran:           $( [[ -n "${ODOO_FOUND}" ]] && echo "skipped setup-server.sh (Odoo 18 present)" || echo "setup-server.sh (with USER=${DEV_USER}, HOME=/home/${DEV_USER})" )
-- DB user:       ${DB_USER}
-- DB name:       ${DB_NAME}
-- DB password:   ${DB_PASS}
-
-Store the password securely (e.g., a secret manager).
-EOF
+# ---------- summary ----------
+step "Summary"
+kv "${BOLD}Unix user${RESET}"   "${DEV_USER} (created if missing)"
+kv "${BOLD}Ran${RESET}"          "setup-server.sh (USER=${DEV_USER}, HOME=${HOME})"
+kv "${BOLD}DB user${RESET}"      "${DB_USER}"
+kv "${BOLD}DB name${RESET}"      "${DB_NAME}"
+# Show password in green if color is on; otherwise plain
+if [[ -n "$GREEN" ]]; then
+  kv "${BOLD}DB password${RESET}" "${GREEN}${DB_PASS}${RESET}"
+else
+  kv "DB password" "${DB_PASS}"
+fi
+printf "\n%sStore the password securely (e.g., a secret manager).%s\n" "$DIM" "$RESET"
 
 # Optional: support a hidden flag to print just the password if invoked that way
 if [[ "${3:-}" == "--print-pass" ]]; then
-  echo "$DB_PASS"
+  printf "%s\n" "${DB_PASS}"
 fi
