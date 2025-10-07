@@ -100,7 +100,6 @@ as_dev() {
 kv() { printf "  %-12s : %s\n" "$1" "$2"; }
 
 abs_path() {
-  # safest portable absolute path resolver
   local p="$1"
   if command -v readlink >/dev/null 2>&1; then
     readlink -f "$p" 2>/dev/null || printf "%s" "$p"
@@ -123,6 +122,8 @@ REQ_FILE="/opt/odoo/18/ce/requirements.txt"
 
 CONFIG_SCRIPT_REL="./odoo-config.sh"
 CONFIG_SCRIPT="$(abs_path "$CONFIG_SCRIPT_REL")"
+SERVICE_SCRIPT="$(abs_path "./odoo-service.sh")"
+
 
 # ---------- sanity checks ----------
 step "Sanity checks"
@@ -197,22 +198,17 @@ ok "Database configured"
 
 # ---------- generate odoo.conf ----------
 step "Generate odoo.conf"
-
-CONFIG_SCRIPT="./odoo-config.sh"
+# Run as root (so it executes even if script lives in /root), then fix ownership.
 if [[ ! -x "$CONFIG_SCRIPT" ]]; then
   info "Making $CONFIG_SCRIPT executable"
   chmod 0755 "$CONFIG_SCRIPT"
 fi
-
-# Run as root so we can execute even if script lives in /root; the script itself
-# writes to /home/${DEV_USER}/${PROJECT_DIR}/odoo.conf based on its args.
 info "Generating config via ${CONFIG_SCRIPT}"
 bash "$CONFIG_SCRIPT" "${DEV_USER}" "${PROJECT_DIR}" "${DB_USER}" "${DB_NAME}" "${DB_PASS}"
 
-# Ensure ownership belongs to the dev user (in case script ran as root)
+# Ensure ownership of the project dir
 TARGET_DIR="/home/${DEV_USER}/${PROJECT_DIR}"
 chown -R "${DEV_USER}:${DEV_USER}" "${TARGET_DIR}" || true
-
 ok "odoo.conf created at ${TARGET_DIR}/odoo.conf"
 
 # ---------- initialize Odoo database (non-interactive) ----------
@@ -222,6 +218,18 @@ as_dev "cd ~/${PROJECT_DIR} && export PATH=\"\$HOME/.local/bin:\$PATH\"; \
 ok "Odoo init completed"
 
 
+# ---------- systemd service ----------
+step "Create & start systemd service"
+
+# Create/update the unit
+info "Creating service via ${SERVICE_SCRIPT}"
+bash "$SERVICE_SCRIPT" "${DOMAIN_RAW}" "${DEV_USER}" --odoo-root /opt/odoo/18/ce
+
+# Activate
+info "Reload systemd and enable/start ${DOMAIN_RAW}.service"
+systemctl daemon-reload
+systemctl enable "${DOMAIN_RAW}.service"
+systemctl restart "${DOMAIN_RAW}.service"
 
 # ---------- summary ----------
 step "Summary"
