@@ -87,11 +87,17 @@ rand_suffix() {
   fi
 }
 
-kv() {
-  # pretty key: value (aligned)
-  # usage: kv "Key" "Value"
-  printf "  %-12s : %s\n" "$1" "$2"
+as_dev() {
+  # Run a command as DEV_USER (non-interactive). Prefers sudo to set proper ownership.
+  if command -v sudo >/dev/null 2>&1; then
+    sudo -u "$DEV_USER" -H bash -lc "$*"
+  else
+    USER="$DEV_USER" LOGNAME="$DEV_USER" HOME="/home/${DEV_USER}" \
+    bash -lc "$*"
+  fi
 }
+
+kv() { printf "  %-12s : %s\n" "$1" "$2"; }
 
 # ---------- normalize inputs ----------
 DOMAIN="$(to_key "$DOMAIN_RAW")"               # example.com -> examplecom
@@ -127,7 +133,7 @@ else
   ok "Created '${DEV_USER}'"
 fi
 
-# ---------- run setup-server.sh with dev-like env (no user switch) ----------
+# ---------- run setup-server.sh with dev-like env (no interactive switch) ----------
 step "Run setup-server.sh (dev-like env)"
 export USER="$DEV_USER"
 export LOGNAME="$DEV_USER"
@@ -145,6 +151,29 @@ fi
 ( ./setup-server.sh )
 ok "setup-server.sh completed"
 
+# ---------- Bootstrap project with Pipenv (non-interactive) ----------
+step "Bootstrap project directory and Pipenv env"
+
+PROJECT_DIR="${DOMAIN_RAW}"   # keep the folder name as the raw domain string
+REQ_FILE="/opt/odoo/18/ce/requirements.txt"
+
+info "Create ~/${PROJECT_DIR}"
+as_dev "mkdir -p ~/${PROJECT_DIR}"
+
+info "Ensure Pipenv is available for ${DEV_USER}"
+as_dev "export PATH=\"\$HOME/.local/bin:\$PATH\"; command -v pipenv >/dev/null 2>&1 || python3 -m pip install --user pipenv"
+
+info "Initialize Pipenv (venv in project: .venv)"
+as_dev "cd ~/${PROJECT_DIR} && export PATH=\"\$HOME/.local/bin:\$PATH\"; PIPENV_VENV_IN_PROJECT=1 pipenv --python 3"
+
+info "Upgrade pip inside the Pipenv virtualenv"
+as_dev "cd ~/${PROJECT_DIR} && export PATH=\"\$HOME/.local/bin:\$PATH\"; PIPENV_VENV_IN_PROJECT=1 pipenv run python -m pip install --upgrade pip"
+
+info "Install requirements from ${REQ_FILE}"
+as_dev "cd ~/${PROJECT_DIR} && export PATH=\"\$HOME/.local/bin:\$PATH\"; PIPENV_VENV_IN_PROJECT=1 pipenv run pip install -r '${REQ_FILE}'"
+
+ok "Python env ready at ~/${PROJECT_DIR}/.venv"
+
 # ---------- configure database ----------
 step "Configure database"
 info "Calling: ./db_add.sh ${DB_USER} ${DB_NAME} **********"
@@ -155,9 +184,9 @@ ok "Database configured"
 step "Summary"
 kv "${BOLD}Unix user${RESET}"   "${DEV_USER} (created if missing)"
 kv "${BOLD}Ran${RESET}"          "setup-server.sh (USER=${DEV_USER}, HOME=${HOME})"
+kv "${BOLD}Project dir${RESET}"  "~/${PROJECT_DIR}"
 kv "${BOLD}DB user${RESET}"      "${DB_USER}"
 kv "${BOLD}DB name${RESET}"      "${DB_NAME}"
-# Show password in green if color is on; otherwise plain
 if [[ -n "$GREEN" ]]; then
   kv "${BOLD}DB password${RESET}" "${GREEN}${DB_PASS}${RESET}"
 else
