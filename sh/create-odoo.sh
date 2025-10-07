@@ -99,6 +99,16 @@ as_dev() {
 
 kv() { printf "  %-12s : %s\n" "$1" "$2"; }
 
+abs_path() {
+  # safest portable absolute path resolver
+  local p="$1"
+  if command -v readlink >/dev/null 2>&1; then
+    readlink -f "$p" 2>/dev/null || printf "%s" "$p"
+  else
+    printf "%s" "$p"
+  fi
+}
+
 # ---------- normalize inputs ----------
 DOMAIN="$(to_key "$DOMAIN_RAW")"               # example.com -> examplecom
 DEV_USER="$(printf "%s" "$DEV_USER_RAW" | tr '[:upper:]' '[:lower:]')"
@@ -108,12 +118,20 @@ DB_USER="u_${DOMAIN}_${SUFFIX}"                # u_examplecom_1a2b3c4d
 DB_NAME="db_${DOMAIN}_${SUFFIX}"               # db_examplecom_1a2b3c4d
 DB_PASS="$(gen_passphrase)"
 
+PROJECT_DIR="${DOMAIN_RAW}"                    # folder name kept as raw domain
+REQ_FILE="/opt/odoo/18/ce/requirements.txt"
+
+CONFIG_SCRIPT_REL="./odoo-config.sh"
+CONFIG_SCRIPT="$(abs_path "$CONFIG_SCRIPT_REL")"
+
 # ---------- sanity checks ----------
 step "Sanity checks"
 [[ -x ./setup-server.sh ]] || { err "setup-server.sh not found or not executable in $(pwd)"; exit 1; }
 [[ -x ./db_add.sh       ]] || { err "db_add.sh not found or not executable at ./db_add.sh"; exit 1; }
+[[ -x "$CONFIG_SCRIPT"  ]] || { err "odoo-config.sh not found or not executable at $CONFIG_SCRIPT"; exit 1; }
 ok "Found ./setup-server.sh"
 ok "Found ./db_add.sh"
+ok "Found $CONFIG_SCRIPT"
 
 # ---------- show inputs ----------
 step "Inputs"
@@ -154,9 +172,6 @@ ok "setup-server.sh completed"
 # ---------- Bootstrap project with Pipenv (non-interactive) ----------
 step "Bootstrap project directory and Pipenv env"
 
-PROJECT_DIR="${DOMAIN_RAW}"   # keep the folder name as the raw domain string
-REQ_FILE="/opt/odoo/18/ce/requirements.txt"
-
 info "Create ~/${PROJECT_DIR}"
 as_dev "mkdir -p ~/${PROJECT_DIR}"
 
@@ -180,6 +195,28 @@ info "Calling: ./db_add.sh ${DB_USER} ${DB_NAME} **********"
 ./db_add.sh "${DB_USER}" "${DB_NAME}" "${DB_PASS}"
 ok "Database configured"
 
+# ---------- generate odoo.conf ----------
+step "Generate odoo.conf"
+
+CONFIG_SCRIPT="./odoo-config.sh"
+if [[ ! -x "$CONFIG_SCRIPT" ]]; then
+  info "Making $CONFIG_SCRIPT executable"
+  chmod 0755 "$CONFIG_SCRIPT"
+fi
+
+# Run as root so we can execute even if script lives in /root; the script itself
+# writes to /home/${DEV_USER}/${PROJECT_DIR}/odoo.conf based on its args.
+info "Generating config via ${CONFIG_SCRIPT}"
+bash "$CONFIG_SCRIPT" "${DEV_USER}" "${PROJECT_DIR}" "${DB_USER}" "${DB_NAME}" "${DB_PASS}"
+
+# Ensure ownership belongs to the dev user (in case script ran as root)
+TARGET_DIR="/home/${DEV_USER}/${PROJECT_DIR}"
+chown -R "${DEV_USER}:${DEV_USER}" "${TARGET_DIR}" || true
+
+ok "odoo.conf created at ${TARGET_DIR}/odoo.conf"
+
+
+
 # ---------- summary ----------
 step "Summary"
 kv "${BOLD}Unix user${RESET}"   "${DEV_USER} (created if missing)"
@@ -198,3 +235,4 @@ printf "\n%sStore the password securely (e.g., a secret manager).%s\n" "$DIM" "$
 if [[ "${3:-}" == "--print-pass" ]]; then
   printf "%s\n" "${DB_PASS}"
 fi
+
