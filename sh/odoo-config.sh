@@ -57,7 +57,22 @@ cat > "$OUTPUT_FILE" <<EOF
 [options]
 
 ; 1. Core Add-ons & Modules
-addons_path = /opt/odoo18-ce/odoo/addons,/opt/odoo18-ce/addons
+addons_path = 
+    /opt/odoo/18/ce/odoo/addons,
+    /opt/odoo/18/ce/addons,
+    /opt/odoo/18/themes,
+    /opt/odoo/18/oca-web,
+    /opt/odoo/18/oca-serverbrand,
+    /opt/odoo/18/oca-website,
+    /opt/odoo/18/oca-mrp,
+    /opt/odoo/18/oca-productattribute,
+    /opt/odoo/18/oca-project,
+    /opt/odoo/18/oca-servertools,
+    /opt/odoo/18/oca-crm,
+    /opt/odoo/18/oca-queue,
+    /opt/odoo/18/oca-ecommerce,
+    /opt/odoo/18/oca-knowledge
+
 server_wide_modules = base,web,queue_job
 import_partial =
 without_demo = True
