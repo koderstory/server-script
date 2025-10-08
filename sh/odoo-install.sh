@@ -4,7 +4,11 @@
 
 set -euo pipefail
 
-# ---------- arg parsing ----------
+
+
+# ==========================================================================
+# arg parsing
+# ==========================================================================
 NO_COLOR_FLAG=0
 ARGS=()
 for a in "$@"; do
@@ -23,7 +27,12 @@ fi
 DOMAIN_RAW="$1"
 DEV_USER_RAW="$2"
 
-# ---------- color detection ----------
+
+
+
+# ==========================================================================
+# color detection
+# ==========================================================================
 supports_color() {
   [[ -t 1 ]] || return 1
   command -v tput >/dev/null 2>&1 || return 1
@@ -51,13 +60,22 @@ err()   { printf "%s[x]%s %s\n" "$RED" "$RESET" "$*" >&2; }
 
 trap 'err "Script failed on line $LINENO."' ERR
 
-# ---------- guards ----------
+
+
+# ==========================================================================
+# guards
+# ==========================================================================
 if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
   err "This script must be run as root."
   exit 1
 fi
 
-# ---------- helpers ----------
+
+
+
+# ==========================================================================
+# helpers
+# ========================================================================== 
 to_key() {
   # lowercase and strip non [a-z0-9]
   local s
@@ -108,7 +126,11 @@ abs_path() {
   fi
 }
 
-# ---------- normalize inputs ----------
+
+
+# ==========================================================================
+# normalize inputs
+# ==========================================================================
 DOMAIN="$(to_key "$DOMAIN_RAW")"               # example.com -> examplecom
 DEV_USER="$(printf "%s" "$DEV_USER_RAW" | tr '[:upper:]' '[:lower:]')"
 SUFFIX="$(rand_suffix)"
@@ -120,21 +142,33 @@ DB_PASS="$(gen_passphrase)"
 PROJECT_DIR="${DOMAIN_RAW}"                    # folder name kept as raw domain
 REQ_FILE="/opt/odoo/18/ce/requirements.txt"
 
-CONFIG_SCRIPT_REL="./odoo-config.sh"
-CONFIG_SCRIPT="$(abs_path "$CONFIG_SCRIPT_REL")"
-SERVICE_SCRIPT="$(abs_path "./odoo-service.sh")"
+
+CONFIG_SCRIPT="$(abs_path ./odoo-config.sh)"
+SERVICE_SCRIPT="$(abs_path ./odoo-service.sh)"
+NGINX_SCRIPT="$(abs_path ./odoo-nginx.sh)"
 
 
-# ---------- sanity checks ----------
+
+# ==========================================================================
+# sanity checks
+# ==========================================================================
 step "Sanity checks"
 [[ -x ./setup-server.sh ]] || { err "setup-server.sh not found or not executable in $(pwd)"; exit 1; }
-[[ -x ./db-add.sh       ]] || { err "db-add.sh not found or not executable at ./db-add.sh"; exit 1; }
+[[ -x ./db_add.sh       ]] || { err "db_add.sh not found or not executable at ./db_add.sh"; exit 1; }
 [[ -x "$CONFIG_SCRIPT"  ]] || { err "odoo-config.sh not found or not executable at $CONFIG_SCRIPT"; exit 1; }
-ok "Found ./setup-server.sh"
-ok "Found ./db-add.sh"
-ok "Found $CONFIG_SCRIPT"
+[[ -x "$SERVICE_SCRIPT"  ]] || { err "odoo-service.sh not found or not executable at $SERVICE_SCRIPT"; exit 1; }
+[[ -x "$NGINX_SCRIPT"  ]] || { err "odoo-nginx.sh not found or not executable at $NGINX_SCRIPT"; exit 1; }
 
-# ---------- show inputs ----------
+ok "Found ./setup-server.sh"
+ok "Found ./db_add.sh"
+ok "Found $CONFIG_SCRIPT"
+ok "Found $SERVICE_SCRIPT"
+ok "Found $NGINX_SCRIPT"
+
+
+# ==========================================================================
+# show inputs
+# ==========================================================================
 step "Inputs"
 kv "Domain (raw)" "$DOMAIN_RAW"
 kv "Domain (key)" "$DOMAIN"
@@ -142,7 +176,10 @@ kv "Dev user"     "$DEV_USER"
 kv "DB user"      "$DB_USER"
 kv "DB name"      "$DB_NAME"
 
-# ---------- create unix user if needed ----------
+
+# ==========================================================================
+# create unix user if needed
+# ==========================================================================
 step "Ensure Unix user"
 if id -u "$DEV_USER" >/dev/null 2>&1; then
   ok "User '${DEV_USER}' already exists"
@@ -152,7 +189,10 @@ else
   ok "Created '${DEV_USER}'"
 fi
 
-# ---------- run setup-server.sh with dev-like env (no interactive switch) ----------
+
+# ==========================================================================
+# run setup-server.sh with dev-like env (no interactive switch)
+# ==========================================================================
 step "Run setup-server.sh (dev-like env)"
 export USER="$DEV_USER"
 export LOGNAME="$DEV_USER"
@@ -170,7 +210,10 @@ fi
 ( ./setup-server.sh )
 ok "setup-server.sh completed"
 
-# ---------- Bootstrap project with Pipenv (non-interactive) ----------
+
+# ==========================================================================
+# Bootstrap project with Pipenv (non-interactive)
+# ==========================================================================
 step "Bootstrap project directory and Pipenv env"
 
 info "Create ~/${PROJECT_DIR}"
@@ -190,13 +233,19 @@ as_dev "cd ~/${PROJECT_DIR} && export PATH=\"\$HOME/.local/bin:\$PATH\"; PIPENV_
 
 ok "Python env ready at ~/${PROJECT_DIR}/.venv"
 
-# ---------- configure database ----------
+
+# ==========================================================================
+# configure database
+# ==========================================================================
 step "Configure database"
-info "Calling: ./db-add.sh ${DB_USER} ${DB_NAME} **********"
-./db-add.sh "${DB_USER}" "${DB_NAME}" "${DB_PASS}"
+info "Calling: ./db_add.sh ${DB_USER} ${DB_NAME} **********"
+./db_add.sh "${DB_USER}" "${DB_NAME}" "${DB_PASS}"
 ok "Database configured"
 
-# ---------- generate odoo.conf ----------
+
+# ==========================================================================
+# generate odoo.conf
+# ==========================================================================
 step "Generate odoo.conf"
 # Run as root (so it executes even if script lives in /root), then fix ownership.
 if [[ ! -x "$CONFIG_SCRIPT" ]]; then
@@ -211,14 +260,22 @@ TARGET_DIR="/home/${DEV_USER}/${PROJECT_DIR}"
 chown -R "${DEV_USER}:${DEV_USER}" "${TARGET_DIR}" || true
 ok "odoo.conf created at ${TARGET_DIR}/odoo.conf"
 
-# ---------- initialize Odoo database (non-interactive) ----------
+
+
+
+# ==========================================================================
+# initialize Odoo database (non-interactive)
+# ==========================================================================
 step "Initialize Odoo database (base,web)"
 as_dev "cd ~/${PROJECT_DIR} && export PATH=\"\$HOME/.local/bin:\$PATH\"; \
   PIPENV_VENV_IN_PROJECT=1 pipenv run /opt/odoo/18/ce/odoo-bin -c odoo.conf -i base,web --stop-after-init"
 ok "Odoo init completed"
 
 
-# ---------- systemd service ----------
+
+# ==========================================================================
+# systemd service
+# ==========================================================================
 step "Create & start systemd service"
 
 # Create/update the unit
@@ -231,7 +288,41 @@ systemctl daemon-reload
 systemctl enable "${DOMAIN_RAW}.service"
 systemctl restart "${DOMAIN_RAW}.service"
 
-# ---------- summary ----------
+
+
+
+# ==========================================================================
+# Nginx vhost
+# ==========================================================================
+step "Create Nginx vhost"
+
+# Read ports from the generated odoo.conf
+ODOO_CONF="/home/${DEV_USER}/${PROJECT_DIR}/odoo.conf"
+if [[ ! -f "$ODOO_CONF" ]]; then
+  err "Cannot find ${ODOO_CONF} to detect ports"
+  exit 1
+fi
+
+HTTP_PORT="$(awk -F'=' '/^[[:space:]]*http_port[[:space:]]*=/ {gsub(/[[:space:]]/,"",$2); print $2}' "$ODOO_CONF")"
+GEVENT_PORT="$(awk -F'=' '/^[[:space:]]*gevent_port[[:space:]]*=/ {gsub(/[[:space:]]/,"",$2); print $2}' "$ODOO_CONF")"
+
+if [[ -z "${HTTP_PORT:-}" || -z "${GEVENT_PORT:-}" ]]; then
+  err "Failed to parse http_port/gevent_port from ${ODOO_CONF}"
+  exit 1
+fi
+
+info "Detected ports: http=${HTTP_PORT}, gevent=${GEVENT_PORT}"
+info "Generating Nginx config via ${NGINX_SCRIPT}"
+bash "$NGINX_SCRIPT" "${PROJECT_DIR}" "${HTTP_PORT}" "${GEVENT_PORT}"
+
+ok "Nginx vhost created and reloaded"
+
+
+
+
+# ==========================================================================
+# summary
+# ==========================================================================
 step "Summary"
 kv "${BOLD}Unix user${RESET}"   "${DEV_USER} (created if missing)"
 kv "${BOLD}Ran${RESET}"          "setup-server.sh (USER=${DEV_USER}, HOME=${HOME})"
@@ -249,4 +340,3 @@ printf "\n%sStore the password securely (e.g., a secret manager).%s\n" "$DIM" "$
 if [[ "${3:-}" == "--print-pass" ]]; then
   printf "%s\n" "${DB_PASS}"
 fi
-
