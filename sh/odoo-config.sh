@@ -80,7 +80,7 @@ translate_modules = ['all']
 
 ; 2. Security & Access Control
 admin_passwd = admin
-proxy_mode = False
+proxy_mode = True
 dbfilter =
 
 ; 3. Database Configuration & Management
@@ -110,7 +110,7 @@ x_sendfile = False
 pidfile =
 
 ; 5. Paths & Data Storage
-data_dir = /home/${linux_user}/.local/share/Odoo
+data_dir = /home/${linux_user}/${domain}
 
 ; 6. Performance & Resource Limits
 ; NOTE: queue_job requires workers > 0 to process jobs.
@@ -129,7 +129,7 @@ osv_memory_count_limit = 0
 transient_age_limit = 1.0
 
 ; 7. Logging & Reporting
-logfile =
+logfile = /home/${linux_user}/${domain}/odoo.log
 log_level = info
 log_handler = :INFO
 syslog = False
