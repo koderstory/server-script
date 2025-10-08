@@ -128,10 +128,10 @@ SERVICE_SCRIPT="$(abs_path "./odoo-service.sh")"
 # ---------- sanity checks ----------
 step "Sanity checks"
 [[ -x ./setup-server.sh ]] || { err "setup-server.sh not found or not executable in $(pwd)"; exit 1; }
-[[ -x ./db_add.sh       ]] || { err "db_add.sh not found or not executable at ./db_add.sh"; exit 1; }
+[[ -x ./db-add.sh       ]] || { err "db-add.sh not found or not executable at ./db-add.sh"; exit 1; }
 [[ -x "$CONFIG_SCRIPT"  ]] || { err "odoo-config.sh not found or not executable at $CONFIG_SCRIPT"; exit 1; }
 ok "Found ./setup-server.sh"
-ok "Found ./db_add.sh"
+ok "Found ./db-add.sh"
 ok "Found $CONFIG_SCRIPT"
 
 # ---------- show inputs ----------
@@ -192,8 +192,8 @@ ok "Python env ready at ~/${PROJECT_DIR}/.venv"
 
 # ---------- configure database ----------
 step "Configure database"
-info "Calling: ./db_add.sh ${DB_USER} ${DB_NAME} **********"
-./db_add.sh "${DB_USER}" "${DB_NAME}" "${DB_PASS}"
+info "Calling: ./db-add.sh ${DB_USER} ${DB_NAME} **********"
+./db-add.sh "${DB_USER}" "${DB_NAME}" "${DB_PASS}"
 ok "Database configured"
 
 # ---------- generate odoo.conf ----------
