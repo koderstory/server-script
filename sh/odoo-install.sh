@@ -207,6 +207,18 @@ if [[ ! -d "$HOME" ]]; then
   ok "Created $HOME"
 fi
 
+# ---- NEW: preflight check for existing project directory ----
+PROJ_PATH="/home/${DEV_USER}/${PROJECT_DIR}"
+step "Preflight"
+if [[ -e "$PROJ_PATH" ]]; then
+  err "Project directory already exists: ${PROJ_PATH}"
+  err "Refusing to continue to avoid overwriting. Please remove or choose a different domain."
+  exit 1
+else
+  ok "No existing project directory found at ${PROJ_PATH}"
+fi
+# -------------------------------------------------------------
+
 ( ./setup-server.sh )
 ok "setup-server.sh completed"
 
