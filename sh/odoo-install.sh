@@ -112,7 +112,7 @@ SSL_SCRIPT="$(abs_path ./ssl.sh)"
 # ==========================================================================
 step "Sanity checks"
 [[ -x ./setup-server.sh ]] || { err "setup-server.sh not found or not executable in $(pwd)"; exit 1; }
-[[ -x ./db_add.sh       ]] || { err "db_add.sh not found or not executable at ./db_add.sh"; exit 1; }
+[[ -x ./db-add.sh       ]] || { err "db-add.sh not found or not executable at ./db-add.sh"; exit 1; }
 [[ -x "$CONFIG_SCRIPT"  ]] || { err "odoo-config.sh not found or not executable at $CONFIG_SCRIPT"; exit 1; }
 [[ -x "$SERVICE_SCRIPT" ]] || { err "odoo-service.sh not found or not executable at $SERVICE_SCRIPT"; exit 1; }
 [[ -x "$NGINX_SCRIPT"   ]] || { err "odoo-nginx.sh not found or not executable at $NGINX_SCRIPT"; exit 1; }
@@ -188,8 +188,8 @@ ok "Python env ready at ~/${PROJECT_DIR}/.venv"
 # DB
 # ==========================================================================
 step "Configure database"
-info "Calling: ./db_add.sh ${DB_USER} ${DB_NAME} **********"
-./db_add.sh "${DB_USER}" "${DB_NAME}" "${DB_PASS}"
+info "Calling: ./db-add.sh ${DB_USER} ${DB_NAME} **********"
+./db-add.sh "${DB_USER}" "${DB_NAME}" "${DB_PASS}"
 ok "Database configured"
 
 # ==========================================================================
