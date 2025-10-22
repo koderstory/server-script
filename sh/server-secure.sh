@@ -7,7 +7,7 @@ set -euo pipefail
 # Configurable variables
 # =========================
 ADMIN_USER="${ADMIN_USER:-dev}"          # admin/sudo user to create/ensure
-SSH_PORT="${SSH_PORT:-22}"               # change if you use a custom SSH port
+SSH_PORT="${SSH_PORT:-22}"               # custom SSH port; we'll also allow OpenSSH profile
 ENABLE_LETSENCRYPT_GROUP="${ENABLE_LETSENCRYPT_GROUP:-1}"  # 1=add www-data to ssl-cert if present
 HIDE_NGINX_TOKENS="${HIDE_NGINX_TOKENS:-1}"               # 1=create conf.d/hide_tokens.conf
 ENABLE_FAIL2BAN_NGINX_JAILS="${ENABLE_FAIL2BAN_NGINX_JAILS:-1}" # 1=enable nginx-http-auth & nginx-botsearch
@@ -93,7 +93,7 @@ if ! id -u "$ADMIN_USER" >/dev/null 2>&1; then
 fi
 usermod -aG sudo "$ADMIN_USER"
 
-# 5a) SSH keys: copy root's authorized_keys to the admin user
+# Copy root's authorized_keys to the admin user
 log "Copying /root/.ssh/authorized_keys to ${ADMIN_USER}…"
 if [[ -f /root/.ssh/authorized_keys ]]; then
   install -d -m 700 -o "$ADMIN_USER" -g "$ADMIN_USER" "/home/$ADMIN_USER/.ssh"
@@ -130,18 +130,33 @@ fi
 systemctl reload ssh || systemctl restart ssh
 
 # =========================
-# 7) UFW firewall
+# 7) UFW firewall (IPv4-only; OpenSSH + Nginx Full; deny DB ports)
 # =========================
-log "Configuring UFW (deny inbound by default; allow SSH/HTTP/HTTPS; deny DB ports)…"
+log "Configuring UFW for IPv4-only; allowing OpenSSH & Nginx Full; denying DB ports…"
 apt -y install ufw >/dev/null 2>&1 || true
+
+# Disable IPv6 in UFW (so rules apply only to IPv4)
+sed -i 's/^IPV6=.*/IPV6=no/' /etc/default/ufw
+
+# Reset and set sane defaults
 ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
-ufw allow "${SSH_PORT}"/tcp
-ufw allow 80/tcp
-ufw allow 443/tcp
-ufw deny 5432/tcp
+
+# Allow SSH via profile; also allow custom port if not 22
+ufw allow OpenSSH
+if [[ "$SSH_PORT" != "22" ]]; then
+  ufw allow "${SSH_PORT}"/tcp
+fi
+
+# Allow Nginx Full (80+443)
+ufw allow "Nginx Full"
+
+# Deny DB ports (MariaDB/MySQL & PostgreSQL)
 ufw deny 3306/tcp
+ufw deny 5432/tcp
+
+# Enable and show status
 ufw --force enable
 ufw status verbose || true
 
@@ -187,7 +202,7 @@ fi
 nginx -t && systemctl reload nginx || true
 
 # =========================
-# 10) (REMOVED as requested)
+# 10) (intentionally removed per your request)
 # =========================
 
 # =========================
