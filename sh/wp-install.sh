@@ -1,237 +1,169 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-# WordPress one-shot installer for Ubuntu (Nginx + PHP-FPM + MariaDB + UFW + Let's Encrypt)
-# - Idempotent(ish): safe to re-run; won’t clobber existing DB unless you choose to.
-# - Safer defaults, stricter Bash, clearer logs.
-# - Works with PHP 7.4–8.x (default: 8.2).
-
-set -Eeuo pipefail
-IFS=$'\n\t'
-
-########################################
-# Helpers
-########################################
-log() { printf "\n\033[1;36m==> %s\033[0m\n" "$*"; }
-err() { printf "\n\033[1;31m[ERROR]\033[0m %s\n" "$*" >&2; }
-confirm() { read -r -p "$1 [y/N]: " ans; [[ ${ans:-N} =~ ^[Yy]$ ]]; }
-require_root() { [[ $EUID -eq 0 ]] || { err "Please run as root."; exit 1; }; }
-exists() { command -v "$1" >/dev/null 2>&1; }
-
-# Hex-only to avoid quoting headaches in SQL and config
-rand_hex() { local n=${1:-16}; openssl rand -hex "$n"; }
-
-# Replace-or-append in php.ini (simple, line-based)
-php_ini_set() {
-  local key="$1" val="$2" ini="/etc/php/${PHP_VERSION}/fpm/php.ini"
-  if grep -qE "^\s*${key}\s*=\s*" "$ini"; then
-    sed -i "s|^\s*${key}\s*=.*|${key} = ${val}|" "$ini"
-  else
-    printf "\n%s = %s\n" "$key" "$val" >>"$ini"
-  fi
+# Function to display message
+display_message() {
+    echo "=========================================="
+    echo "$1"
+    echo "=========================================="
 }
 
-########################################
-# Input
-########################################
-require_root
+# Function to generate a random string for passwords and db usernames
+generate_random_string() {
+    length=$1
+    openssl rand -base64 $length | tr -dc 'a-zA-Z0-9' | fold -w $length | head -n 1
+}
 
-read -r -p "Enter your domain (e.g., example.com or www.example.com): " DOMAIN
-DOMAIN=${DOMAIN,,} # lowercase
-[[ -n ${DOMAIN} ]] || { err "Domain is required."; exit 1; }
+# Prompt for domain and convert domain name for DB name (replace '.' with '_')
+read -p "Enter your domain (e.g., www.koderstory.com or subdomain.example.com): " domain
 
-# Compute server_names and canonical host
-if [[ $DOMAIN == www.* ]]; then
-  ROOT_DOMAIN="${DOMAIN#www.}"
-  SERVER_NAMES="$ROOT_DOMAIN www.$ROOT_DOMAIN"
-  CANON_HOST="$ROOT_DOMAIN"
+# Check if domain starts with "www." and determine root domain
+if [[ $domain == www.* ]]; then
+    domain_without_www=$(echo "$domain" | sed 's/^www\.//')
+    server_names="$domain_without_www www.$domain_without_www"
 else
-  ROOT_DOMAIN="$DOMAIN"
-  SERVER_NAMES="$ROOT_DOMAIN"
-  CANON_HOST="$ROOT_DOMAIN"
+    # For other subdomains or domains without 'www', only register as it is
+    domain_without_www=$domain
+    server_names=$domain_without_www
 fi
 
-# DB identifiers (<= 64 chars for MariaDB). Replace dots with underscores.
-DB_NAME=${ROOT_DOMAIN//./_}
-# Add a short random suffix to the user for uniqueness
-DB_USER="${DB_NAME}_$(rand_hex 4)"
-DB_PASS=$(rand_hex 16)
+# Convert the domain to a valid DB name by replacing dots with underscores
+db_name=$(echo "$domain_without_www" | tr '.' '_')
+db_user="${db_name}_$(generate_random_string 8)"
+db_password=$(generate_random_string 16)
 
-read -r -p "Enter PHP version (7.4, 8.0, 8.1, 8.2) [8.2]: " PHP_VERSION
-PHP_VERSION=${PHP_VERSION:-8.2}
+# Prompt for PHP version, with default as PHP 7.4
+read -p "Enter PHP version to install (e.g., 7.4, 8.0, 8.1, 8.2) [default is 8.2]: " php_version
+php_version=${php_version:-8.2}
 
-read -r -p "Email for Let's Encrypt/Certbot notices: " LE_EMAIL
-[[ -n ${LE_EMAIL} ]] || { err "Email is required for Let's Encrypt."; exit 1; }
-
-########################################
-# Packages
-########################################
-log "Installing system packages (Nginx, MariaDB, PHP ${PHP_VERSION})..."
-apt-get update -y
-apt-get install -y nginx mariadb-server mariadb-client curl git zip unzip software-properties-common ufw
-
-# PHP from ppa:ondrej/php
-if ! apt-cache policy | grep -q "ondrej/php"; then
-  log "Adding ppa:ondrej/php"
-  LC_ALL=C.UTF-8 add-apt-repository -y ppa:ondrej/php
-  apt-get update -y
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+    echo "Please run this script as root."
+    exit
 fi
 
-# Core PHP packages (php-json is default in 8.x)
-PHP_PKGS=("php${PHP_VERSION}" "php${PHP_VERSION}-fpm" "php${PHP_VERSION}-mysql" "php${PHP_VERSION}-cli" \
-          "php${PHP_VERSION}-curl" "php${PHP_VERSION}-zip" "php${PHP_VERSION}-xml" \
-          "php${PHP_VERSION}-mbstring" "php${PHP_VERSION}-gd" "php${PHP_VERSION}-soap" \
-          "php${PHP_VERSION}-intl" "php${PHP_VERSION}-bcmath" "php${PHP_VERSION}-xmlrpc")
+# Step 1: Install necessary libraries
+display_message "Installing necessary libraries and dependencies..."
+sudo apt update -y
+sudo apt install -y nginx mariadb-server mariadb-client curl git zip unzip software-properties-common
 
-# Only add php-json for < 8.0
-if [[ ! ${PHP_VERSION} =~ ^8 ]]; then
-  PHP_PKGS+=("php${PHP_VERSION}-json")
-fi
+# Add PHP PPA and install selected PHP version with extensions
+display_message "Adding PHP PPA repository and installing PHP $php_version..."
+sudo LC_ALL=C.UTF-8 add-apt-repository -y ppa:ondrej/php
+sudo apt update -y
 
-apt-get install -y "${PHP_PKGS[@]}"
-
-systemctl enable --now php${PHP_VERSION}-fpm
-
-########################################
-# Tune PHP for WordPress
-########################################
-log "Configuring PHP-FPM settings..."
-php_ini_set upload_max_filesize 64M
-php_ini_set post_max_size 64M
-php_ini_set memory_limit 256M
-php_ini_set max_execution_time 300
-systemctl reload php${PHP_VERSION}-fpm
-
-########################################
-# MariaDB: DB + user
-########################################
-log "Configuring MariaDB (database & user)..."
-systemctl enable --now mariadb
-
-# Create/replace database optionally
-DB_EXISTS=$(mysql -Nse "SHOW DATABASES LIKE '${DB_NAME}'" || true)
-if [[ -n "$DB_EXISTS" ]]; then
-  log "Database '${DB_NAME}' already exists."
-  if confirm "Drop and recreate database '${DB_NAME}'?"; then
-    mysql -e "DROP DATABASE \`${DB_NAME}\`;"
-    mysql -e "CREATE DATABASE \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-  else
-    log "Keeping existing database."
-  fi
+# Install PHP and required extensions, skipping php-json for PHP 8.x+
+if [[ "$php_version" =~ ^8 ]]; then
+    sudo apt install -y php${php_version} php${php_version}-fpm php${php_version}-mysql php${php_version}-cli php${php_version}-curl php${php_version}-zip php${php_version}-xml php${php_version}-mbstring php${php_version}-gd php${php_version}-soap php${php_version}-intl php${php_version}-bcmath php${php_version}-xmlrpc
 else
-  mysql -e "CREATE DATABASE \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+    sudo apt install -y php${php_version} php${php_version}-fpm php${php_version}-mysql php${php_version}-cli php${php_version}-curl php${php_version}-zip php${php_version}-xml php${php_version}-mbstring php${php_version}-gd php${php_version}-soap php${php_version}-intl php${php_version}-bcmath php${php_version}-xmlrpc php${php_version}-json
 fi
 
-# Create/ensure user + grant (password is hex-only, safe to single-quote)
-mysql -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';"
-mysql -e "GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost'; FLUSH PRIVILEGES;"
+# Configure PHP settings for WordPress
+display_message "Configuring PHP settings..."
+sudo sed -i "s/upload_max_filesize = .*/upload_max_filesize = 64M/" /etc/php/${php_version}/fpm/php.ini
+sudo sed -i "s/post_max_size = .*/post_max_size = 64M/" /etc/php/${php_version}/fpm/php.ini
+sudo sed -i "s/memory_limit = .*/memory_limit = 256M/" /etc/php/${php_version}/fpm/php.ini
+sudo sed -i "s/max_execution_time = .*/max_execution_time = 300/" /etc/php/${php_version}/fpm/php.ini
 
-########################################
-# WordPress download & config
-########################################
-log "Downloading WordPress..."
-TMP_DIR=$(mktemp -d)
-cd "$TMP_DIR"
-curl -fsSL -o latest.tar.gz https://wordpress.org/latest.tar.gz
- tar -xzf latest.tar.gz
+# Step 2: Set up MariaDB database for WordPress
+display_message "Setting up MariaDB database and user..."
+sudo systemctl start mariadb
+sudo systemctl enable mariadb
 
-INSTALL_ROOT="/var/www/${CANON_HOST}"
-mkdir -p "$INSTALL_ROOT"
-# Only move if empty to avoid overwriting an existing site
-if [[ -z $(ls -A "$INSTALL_ROOT" 2>/dev/null || true) ]]; then
-  mv wordpress/* "$INSTALL_ROOT"/
+# Secure MariaDB installation (optional)
+#display_message "Securing MariaDB installation..."
+#sudo mysql_secure_installation
+
+# Check if the database already exists
+db_exists=$(sudo mysql -e "SHOW DATABASES LIKE '${db_name}';" | grep "${db_name}")
+
+if [ "$db_exists" ]; then
+    display_message "Database ${db_name} already exists."
+    read -p "Do you want to delete the existing database and create a new one? (y/n): " delete_db
+    if [ "$delete_db" == "y" ]; then
+        sudo mysql -e "DROP DATABASE ${db_name};"
+        sudo mysql -e "CREATE DATABASE ${db_name};"
+    else
+        display_message "Skipping database creation."
+    fi
 else
-  log "Target directory ${INSTALL_ROOT} not empty; skipping move of core files."
+    sudo mysql -e "CREATE DATABASE ${db_name};"
 fi
 
-chown -R www-data:www-data "$INSTALL_ROOT"
-find "$INSTALL_ROOT" -type d -exec chmod 755 {} +
-find "$INSTALL_ROOT" -type f -exec chmod 644 {} +
+# Create or update the database user
+sudo mysql -e "CREATE USER IF NOT EXISTS '${db_user}'@'localhost' IDENTIFIED BY '${db_password}';"
+sudo mysql -e "GRANT ALL PRIVILEGES ON ${db_name}.* TO '${db_user}'@'localhost';"
+sudo mysql -e "FLUSH PRIVILEGES;"
 
-# wp-config.php
-if [[ ! -f "$INSTALL_ROOT/wp-config.php" ]]; then
-  cp "$INSTALL_ROOT/wp-config-sample.php" "$INSTALL_ROOT/wp-config.php"
-  sed -i "s/database_name_here/${DB_NAME}/" "$INSTALL_ROOT/wp-config.php"
-  sed -i "s/username_here/${DB_USER}/" "$INSTALL_ROOT/wp-config.php"
-  sed -i "s/password_here/${DB_PASS}/" "$INSTALL_ROOT/wp-config.php"
-  # Add WordPress salts
-  SALTS=$(curl -fsSL https://api.wordpress.org/secret-key/1.1/salt/)
-  if [[ -n $SALTS ]]; then
-    # Replace placeholder keys block
-    sed -i "/AUTH_KEY/,\$d" "$INSTALL_ROOT/wp-config.php"
-    printf "\n%s\n" "$SALTS" >> "$INSTALL_ROOT/wp-config.php"
-  fi
-fi
+# Step 3: Download and configure WordPress
+display_message "Downloading and configuring WordPress..."
+sudo curl -O https://wordpress.org/latest.tar.gz
+sudo tar -xzf latest.tar.gz
+sudo mkdir -p /var/www/$domain_without_www
+sudo mv wordpress/* /var/www/$domain_without_www
+sudo chown -R www-data:www-data /var/www/$domain_without_www
+sudo chmod -R 755 /var/www/$domain_without_www
 
-########################################
-# Nginx vhost
-########################################
-log "Configuring Nginx for ${SERVER_NAMES}..."
-SOCKET_PATH="/var/run/php/php${PHP_VERSION}-fpm.sock"
-SITE_CONF="/etc/nginx/sites-available/${CANON_HOST}"
+# Create WordPress wp-config.php
+sudo mv /var/www/$domain_without_www/wp-config-sample.php /var/www/$domain_without_www/wp-config.php
 
-cat >"$SITE_CONF" <<EOF
+# Update wp-config.php with database information
+sudo sed -i "s/database_name_here/${db_name}/" /var/www/$domain_without_www/wp-config.php
+sudo sed -i "s/username_here/${db_user}/" /var/www/$domain_without_www/wp-config.php
+sudo sed -i "s/password_here/${db_password}/" /var/www/$domain_without_www/wp-config.php
+
+# Step 4: Configure Nginx server block
+display_message "Configuring Nginx for domain $server_names..."
+
+sudo tee /etc/nginx/sites-available/$domain_without_www > /dev/null <<EOL
 server {
     listen 80;
-    server_name ${SERVER_NAMES};
-
-    root ${INSTALL_ROOT};
+    server_name $server_names;
+    root /var/www/$domain_without_www;
     index index.php index.html index.htm;
 
-    # Recommended for WP permalinks
     location / {
         try_files \$uri \$uri/ /index.php?\$args;
     }
 
-    location ~ \.php$ {
+    location ~ \.php\$ {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:${SOCKET_PATH};
+        fastcgi_pass unix:/var/run/php/php${php_version}-fpm.sock;
     }
 
-    # Security hardening
-    location ~* /\. { deny all; }
-    location = /xmlrpc.php { deny all; }
-
-    client_max_body_size 128m;
+    location ~ /\.ht {
+        deny all;
+    }
 }
-EOF
+EOL
 
-ln -sfn "$SITE_CONF" "/etc/nginx/sites-enabled/${CANON_HOST}"
-nginx -t
-systemctl reload nginx
+# Enable Nginx site and reload configuration
+sudo ln -s /etc/nginx/sites-available/$domain_without_www /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
 
-########################################
-# UFW
-########################################
-log "Configuring UFW..."
-ufw allow OpenSSH || true
-ufw allow "Nginx Full" || true
-ufw --force enable || true
+# Step 5: Set up UFW Firewall
+display_message "Configuring UFW firewall to allow Nginx traffic..."
+sudo ufw allow 'OpenSSH'
+sudo ufw allow 'Nginx Full'
+sudo ufw enable
 
-########################################
-# Let's Encrypt (Certbot)
-########################################
-log "Installing Certbot & requesting certificates..."
-apt-get install -y certbot python3-certbot-nginx
+# Step 6: Install Certbot and obtain SSL certificate for the domain
+display_message "Installing Certbot and generating SSL certificates using Let's Encrypt..."
 
-# Cover both root and www if applicable
-CERT_DOMAINS=(-d "$ROOT_DOMAIN")
-if [[ $SERVER_NAMES == *"www."* ]]; then
-  CERT_DOMAINS+=(-d "www.$ROOT_DOMAIN")
-fi
+# Install Certbot
+sudo apt install certbot python3-certbot-nginx -y
 
-certbot --nginx "${CERT_DOMAINS[@]}" --non-interactive --agree-tos --email "$LE_EMAIL" --redirect || {
-  err "Certbot failed; you can retry later with: certbot --nginx -d ${SERVER_NAMES// / -d }";
-}
+# Obtain an SSL certificate with Certbot using your email
+sudo certbot --nginx -d $domain_without_www  --non-interactive --agree-tos --email hello@koderstory.com
 
-systemctl reload nginx
+# Step 7: Reload Nginx to apply SSL
+display_message "Reloading Nginx to apply SSL..."
+sudo systemctl reload nginx
 
-########################################
-# Done
-########################################
-log "WordPress installed (or updated) successfully!"
-echo "Domain:              $SERVER_NAMES"
-echo "Web root:            $INSTALL_ROOT"
-echo "Database Name:       $DB_NAME"
-echo "Database User:       $DB_USER"
-echo "Database Password:   $DB_PASS"
-echo "Visit:               https://${CANON_HOST} (or http if SSL not issued)"
+# Display the database credentials for WordPress
+display_message "WordPress installed successfully!"
+echo "Database Name: $db_name"
+echo "Database User: $db_user"
+echo "Database Password: $db_password"
+echo "Please complete the WordPress installation by visiting: https://$domain_without_www or https://www.$domain_without_www"
