@@ -170,7 +170,7 @@ odoo18_path() {
 
 ODOO_FOUND="$(odoo18_path || true)"
 if [[ -n "${ODOO_FOUND}" ]]; then
-  echo "==> Odoo 18 detected at '${ODOO_FOUND}' — skipping ./setup-server.sh"
+  echo "==> Odoo 18 detected at '${ODOO_FOUND}' — skipping ./server-setup.sh"
 else
   print_green ">>> Cloning Odoo 18.0 CE and installing Python requirements..."
   git clone -b "18.0" --single-branch --depth 1 https://github.com/odoo/odoo.git /opt/odoo/18/ce
