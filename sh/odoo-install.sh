@@ -111,7 +111,7 @@ SSL_SCRIPT="$(abs_path ./ssl.sh)"
 # sanity checks
 # ==========================================================================
 step "Sanity checks"
-[[ -x ./setup-server.sh ]] || { err "setup-server.sh not found or not executable in $(pwd)"; exit 1; }
+[[ -x ./server-setup.sh ]] || { err "server-setup.sh not found or not executable in $(pwd)"; exit 1; }
 [[ -x ./db-add.sh       ]] || { err "db-add.sh not found or not executable at ./db-add.sh"; exit 1; }
 [[ -x "$CONFIG_SCRIPT"  ]] || { err "odoo-config.sh not found or not executable at $CONFIG_SCRIPT"; exit 1; }
 [[ -x "$SERVICE_SCRIPT" ]] || { err "odoo-service.sh not found or not executable at $SERVICE_SCRIPT"; exit 1; }
@@ -142,7 +142,7 @@ else
   ok "Created '${DEV_USER}'"
 fi
 
-step "Run setup-server.sh (dev-like env)"
+step "Run server-setup.sh (dev-like env)"
 export USER="$DEV_USER"
 export LOGNAME="$DEV_USER"
 export HOME="/home/${DEV_USER}"
@@ -165,8 +165,8 @@ else
   ok "No existing project directory at ${PROJ_PATH}"
 fi
 
-( ./setup-server.sh )
-ok "setup-server.sh completed"
+( ./server-setup.sh )
+ok "server-setup.sh completed"
 
 # ==========================================================================
 # Pipenv env
