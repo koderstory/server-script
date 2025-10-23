@@ -74,7 +74,7 @@ upstream ${KEY}_longpolling {
 }
  
 ## NEW: map to set proper Connection header for WebSocket upgrades
-map $http_upgrade $connection_upgrade { default upgrade; '' close; }
+map \$http_upgrade \$connection_upgrade { default upgrade; '' close; }
 
 server {
     listen 80;
