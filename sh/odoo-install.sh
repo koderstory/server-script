@@ -182,7 +182,12 @@ info "Upgrade pip inside the Pipenv virtualenv"
 as_dev "cd ~/${PROJECT_DIR} && export PATH=\"\$HOME/.local/bin:\$PATH\"; PIPENV_VENV_IN_PROJECT=1 pipenv run python -m pip install --upgrade pip"
 info "Install requirements from ${REQ_FILE}"
 as_dev "cd ~/${PROJECT_DIR} && export PATH=\"\$HOME/.local/bin:\$PATH\"; PIPENV_VENV_IN_PROJECT=1 pipenv run pip install -r '${REQ_FILE}'"
+info "Install extra libraries into Pipenv (updates Pipfile)"
+as_dev "cd ~/${PROJECT_DIR} && export PATH=\"\$HOME/.local/bin:\$PATH\"; PIPENV_VENV_IN_PROJECT=1 pipenv install paramiko"
+
+
 ok "Python env ready at ~/${PROJECT_DIR}/.venv"
+
 
 # ==========================================================================
 # DB
