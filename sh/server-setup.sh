@@ -186,6 +186,7 @@ else
   git clone -b "18.0" https://github.com/OCA/queue.git /opt/odoo/18/oca-queue
   git clone -b "18.0" https://github.com/OCA/e-commerce.git /opt/odoo/18/oca-ecommerce
   git clone -b "18.0" https://github.com/OCA/knowledge.git /opt/odoo/18/oca-knowledge
+  git clone -b "18.0" https://github.com/koderstory/odoo-addons /opt/odoo/18/odoo-addons
 fi
 
 # # -------------------------------------------------------------------
