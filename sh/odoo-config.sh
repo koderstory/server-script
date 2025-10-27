@@ -71,7 +71,8 @@ addons_path =
     /opt/odoo/18/oca-crm,
     /opt/odoo/18/oca-queue,
     /opt/odoo/18/oca-ecommerce,
-    /opt/odoo/18/oca-knowledge
+    /opt/odoo/18/oca-knowledge,
+    /opt/odoo/18/odoo-addons
 
 server_wide_modules = base,web,queue_job
 import_partial =
