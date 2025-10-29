@@ -130,11 +130,19 @@ apt install -y \
 # -------------------------------------------------------------------
 # 12. Install OpenSSL 1.1 .deb (for legacy compatibility)
 # -------------------------------------------------------------------
+#print_green ">>> Downloading and installing libssl1.1..."
+#LIBSSL_URL="http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb"
+#wget -q "$LIBSSL_URL" -O /tmp/libssl1.1.deb
+#apt install -y /tmp/libssl1.1.deb
+#rm /tmp/libssl1.1.deb
+
 print_green ">>> Downloading and installing libssl1.1..."
 LIBSSL_URL="http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb"
-wget -q "$LIBSSL_URL" -O /tmp/libssl1.1.deb
-apt install -y /tmp/libssl1.1.deb
-rm /tmp/libssl1.1.deb
+TMP_DEB="$(mktemp /tmp/libssl1.1.XXXXXX.deb)"
+trap 'rm -f "$TMP_DEB"' EXIT
+
+curl -fsSL --retry 3 --retry-connrefused "$LIBSSL_URL" -o "$TMP_DEB"
+apt install -y "$TMP_DEB"
 
 # -------------------------------------------------------------------
 # 13. Install wkhtmltopdf .deb
