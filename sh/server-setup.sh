@@ -182,19 +182,19 @@ if [[ -n "${ODOO_FOUND}" ]]; then
 else
   print_green ">>> Cloning Odoo 18.0 CE and installing Python requirements..."
   git clone -b "18.0" --single-branch --depth 1 https://github.com/odoo/odoo.git /opt/odoo/18/ce
-  git clone -b "18.0" https://github.com/odoo/design-themes.git /opt/odoo/18/themes
-  git clone -b "18.0" https://github.com/OCA/web.git /opt/odoo/18/oca-web
-  git clone -b "18.0" https://github.com/OCA/server-brand.git /opt/odoo/18/oca-serverbrand
-  git clone -b "18.0" https://github.com/OCA/website.git /opt/odoo/18/oca-website
-  git clone -b "18.0" https://github.com/OCA/manufacture.git /opt/odoo/18/oca-mrp
-  git clone -b "18.0" https://github.com/OCA/product-attribute.git /opt/odoo/18/oca-productattribute
-  git clone -b "18.0" https://github.com/OCA/project.git /opt/odoo/18/oca-project
-  git clone -b "18.0" https://github.com/OCA/server-tools.git /opt/odoo/18/oca-servertools
-  git clone -b "18.0" https://github.com/OCA/crm.git /opt/odoo/18/oca-crm
-  git clone -b "18.0" https://github.com/OCA/queue.git /opt/odoo/18/oca-queue
-  git clone -b "18.0" https://github.com/OCA/e-commerce.git /opt/odoo/18/oca-ecommerce
-  git clone -b "18.0" https://github.com/OCA/knowledge.git /opt/odoo/18/oca-knowledge
-  git clone -b "18.0" https://github.com/koderstory/odoo-addons /opt/odoo/18/odoo-addons
+  #git clone -b "18.0" https://github.com/odoo/design-themes.git /opt/odoo/18/themes
+  #git clone -b "18.0" https://github.com/OCA/web.git /opt/odoo/18/oca-web
+  #git clone -b "18.0" https://github.com/OCA/server-brand.git /opt/odoo/18/oca-serverbrand
+  #git clone -b "18.0" https://github.com/OCA/website.git /opt/odoo/18/oca-website
+  #git clone -b "18.0" https://github.com/OCA/manufacture.git /opt/odoo/18/oca-mrp
+  #git clone -b "18.0" https://github.com/OCA/product-attribute.git /opt/odoo/18/oca-productattribute
+  #git clone -b "18.0" https://github.com/OCA/project.git /opt/odoo/18/oca-project
+  #git clone -b "18.0" https://github.com/OCA/server-tools.git /opt/odoo/18/oca-servertools
+  #git clone -b "18.0" https://github.com/OCA/crm.git /opt/odoo/18/oca-crm
+  #git clone -b "18.0" https://github.com/OCA/queue.git /opt/odoo/18/oca-queue
+  #git clone -b "18.0" https://github.com/OCA/e-commerce.git /opt/odoo/18/oca-ecommerce
+  #git clone -b "18.0" https://github.com/OCA/knowledge.git /opt/odoo/18/oca-knowledge
+  #git clone -b "18.0" https://github.com/koderstory/odoo-addons /opt/odoo/18/odoo-addons
 fi
 
 # # -------------------------------------------------------------------
