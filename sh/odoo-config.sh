@@ -58,21 +58,21 @@ cat > "$OUTPUT_FILE" <<EOF
 
 ; 1. Core Add-ons & Modules
 addons_path = 
-    /home/odoo/ce/odoo/addons,
-    /home/odoo/ce/addons,
-    /home/odoo/themes,
-    /home/odoo/oca-web,
-    /home/odoo/oca-serverbrand,
-    /home/odoo/oca-website,
-    /home/odoo/oca-mrp,
-    /home/odoo/oca-productattribute,
-    /home/odoo/oca-project,
-    /home/odoo/oca-servertools,
-    /home/odoo/oca-crm,
-    /home/odoo/oca-queue,
-    /home/odoo/oca-ecommerce,
-    /home/odoo/oca-knowledge,
-    /home/odoo/odoo-addons
+    /home/odoo/sources/ce/odoo/addons,
+    /home/odoo/sources/ce/addons,
+    /home/odoo/sources/themes,
+    /home/odoo/sources/oca-web,
+    /home/odoo/sources/oca-serverbrand,
+    /home/odoo/sources/oca-website,
+    /home/odoo/sources/oca-mrp,
+    /home/odoo/sources/oca-productattribute,
+    /home/odoo/sources/oca-project,
+    /home/odoo/sources/oca-servertools,
+    /home/odoo/sources/oca-crm,
+    /home/odoo/sources/oca-queue,
+    /home/odoo/sources/oca-ecommerce,
+    /home/odoo/sources/oca-knowledge,
+    /home/odoo/sources/odoo-addons
 
 server_wide_modules = base,web
 import_partial =

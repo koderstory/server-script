@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # make-odoo-service.sh — create and enable a systemd service for an Odoo project
-# Usage: ./make-odoo-service.sh <domain> <linux_user> [--odoo-root /home/odoo/ce] [--no-start]
+# Usage: ./make-odoo-service.sh <domain> <linux_user> [--odoo-root /home/odoo/sources/ce] [--no-start]
 
 set -euo pipefail
 
-OD_ROOT="/home/odoo/ce"
+OD_ROOT="/home/odoo/sources/ce"
 START_AFTER_CREATE=1
 
 # --- parse args ---
 if [[ $# -lt 2 ]]; then
-  echo "Usage: $0 <domain> <linux_user> [--odoo-root /home/odoo/ce] [--no-start]" >&2
+  echo "Usage: $0 <domain> <linux_user> [--odoo-root /home/odoo/sources/ce] [--no-start]" >&2
   exit 1
 fi
 

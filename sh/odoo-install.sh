@@ -99,7 +99,7 @@ DB_NAME="db_${DOMAIN}_${SUFFIX}"
 DB_PASS="$(gen_passphrase)"
 PROJECT_DIR="${DOMAIN_RAW}"                    # folder name kept as raw domain
 PROJ_PATH="/home/${DEV_USER}/${PROJECT_DIR}"
-REQ_FILE="/home/odoo/ce/requirements.txt"
+REQ_FILE="/home/odoo/sources/ce/requirements.txt"
 
 CONFIG_SCRIPT="$(abs_path ./odoo-config.sh)"
 SERVICE_SCRIPT="$(abs_path ./odoo-service.sh)"
@@ -210,7 +210,7 @@ ok "odoo.conf created at ${PROJ_PATH}/odoo.conf"
 # ==========================================================================
 step "Initialize Odoo database (base,web)"
 as_dev "cd ~/${PROJECT_DIR} && export PATH=\"\$HOME/.local/bin:\$PATH\"; \
-  PIPENV_VENV_IN_PROJECT=1 pipenv run /home/odoo/ce/odoo-bin -c odoo.conf -i base,web --stop-after-init"
+  PIPENV_VENV_IN_PROJECT=1 pipenv run /home/odoo/sources/ce/odoo-bin -c odoo.conf -i base,web --stop-after-init"
 ok "Odoo init completed"
 
 # ==========================================================================
@@ -219,7 +219,7 @@ ok "Odoo init completed"
 step "Create & start systemd service"
 chmod +x "$SERVICE_SCRIPT" || true
 info "Creating service via ${SERVICE_SCRIPT}"
-bash "$SERVICE_SCRIPT" "${DOMAIN_RAW}" "${DEV_USER}" --odoo-root /home/odoo/ce
+bash "$SERVICE_SCRIPT" "${DOMAIN_RAW}" "${DEV_USER}" --odoo-root /home/odoo/sources/ce
 info "Reload systemd and enable/start ${DOMAIN_RAW}.service"
 systemctl daemon-reload
 systemctl enable "${DOMAIN_RAW}.service"
