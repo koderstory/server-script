@@ -131,8 +131,8 @@ transient_age_limit = 1.0
 
 ; 7. Logging & Reporting
 logfile = /home/${linux_user}/${domain}/odoo.log
-log_level = warning
-log_handler = :WARNING
+log_level = warn
+log_handler = :WARN
 syslog = False
 log_db = False
 log_db_level = warning
