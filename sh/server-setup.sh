@@ -182,7 +182,6 @@ odoo18_path() {
   # detect common Odoo 18 install dirs; echo the first match
   local candidates=(
     "/home/odoo/sources"
-    "/home/odoo"
     "/opt/odoo/18"
     "/opt/odoo18"
     "/opt/odoo/odoo18"
