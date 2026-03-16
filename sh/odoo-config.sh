@@ -58,23 +58,23 @@ cat > "$OUTPUT_FILE" <<EOF
 
 ; 1. Core Add-ons & Modules
 addons_path = 
-    /opt/odoo/18/ce/odoo/addons,
-    /opt/odoo/18/ce/addons,
-    /opt/odoo/18/themes,
-    /opt/odoo/18/oca-web,
-    /opt/odoo/18/oca-serverbrand,
-    /opt/odoo/18/oca-website,
-    /opt/odoo/18/oca-mrp,
-    /opt/odoo/18/oca-productattribute,
-    /opt/odoo/18/oca-project,
-    /opt/odoo/18/oca-servertools,
-    /opt/odoo/18/oca-crm,
-    /opt/odoo/18/oca-queue,
-    /opt/odoo/18/oca-ecommerce,
-    /opt/odoo/18/oca-knowledge,
-    /opt/odoo/18/odoo-addons
+    /home/odoo/ce/odoo/addons,
+    /home/odoo/ce/addons,
+    /home/odoo/themes,
+    /home/odoo/oca-web,
+    /home/odoo/oca-serverbrand,
+    /home/odoo/oca-website,
+    /home/odoo/oca-mrp,
+    /home/odoo/oca-productattribute,
+    /home/odoo/oca-project,
+    /home/odoo/oca-servertools,
+    /home/odoo/oca-crm,
+    /home/odoo/oca-queue,
+    /home/odoo/oca-ecommerce,
+    /home/odoo/oca-knowledge,
+    /home/odoo/odoo-addons
 
-server_wide_modules = base,web,queue_job
+server_wide_modules = base,web
 import_partial =
 without_demo = True
 translate_modules = ['all']
@@ -93,7 +93,7 @@ db_password = $db_pass
 db_template = template0
 db_sslmode = prefer
 unaccent = False
-db_maxconn = 64
+db_maxconn = 16
 db_maxconn_gevent = False
 db_replica_host = False
 db_replica_port = False
@@ -114,16 +114,16 @@ pidfile =
 data_dir = /home/${linux_user}/${domain}
 
 ; 6. Performance & Resource Limits
-; NOTE: queue_job requires workers > 0 to process jobs.
-workers = 2
-max_cron_threads = 2
-limit_memory_hard = 2684354560
+; Optimized for multiple instances on VPS
+workers = 1
+max_cron_threads = 1
+limit_memory_hard = 1073741824
 limit_memory_hard_gevent = False
-limit_memory_soft = 2147483648
+limit_memory_soft = 805306368
 limit_memory_soft_gevent = False
-limit_request = 65536
-limit_time_cpu = 60
-limit_time_real = 120
+limit_request = 8192
+limit_time_cpu = 30
+limit_time_real = 60
 limit_time_real_cron = -1
 limit_time_worker_cron = 0
 osv_memory_count_limit = 0
@@ -131,14 +131,14 @@ transient_age_limit = 1.0
 
 ; 7. Logging & Reporting
 logfile = /home/${linux_user}/${domain}/odoo.log
-log_level = info
-log_handler = :INFO
+log_level = warning
+log_handler = :WARNING
 syslog = False
 log_db = False
 log_db_level = warning
 reportgz = False
 screencasts =
-screenshots = /tmp/odoo_tests
+screenshots =
 
 ; 8. Email & Notifications
 smtp_server = localhost
@@ -153,8 +153,6 @@ from_filter = False
 
 ; 9. Localization & Data Formats
 csv_internal_sep = ,
-geoip_city_db = /usr/share/GeoIP/GeoLite2-City.mmdb
-geoip_country_db = /usr/share/GeoIP/GeoLite2-Country.mmdb
 
 ; 10. Testing & Maintenance
 test_enable = False
@@ -162,12 +160,6 @@ test_file =
 test_tags = None
 pre_upgrade_scripts =
 upgrade_path =
-
-; 11. Queue Job (OCA)
-; - server_wide_modules above loads queue_job so workers can execute jobs
-; - tweak channel sizing to your workload. Format: name:count entries, comma-separated.
-[queue_job]
-channels = root:2,default:2,mail:1
 EOF
 
 # Final message

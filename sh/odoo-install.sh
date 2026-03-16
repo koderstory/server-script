@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # setup.sh — run as root
-# Usage: ./setup.sh <domain> <email> <user>
+# Usage: ./setup.sh <domain> <email>
 
 set -euo pipefail
 
 # ==========================================================================
-# arg parsing (mandatory: domain, email, user)
+# arg parsing (mandatory: domain, email)
 # ==========================================================================
-if [[ $# -ne 3 ]]; then
-  echo "Usage: $0 <domain> <email> <user>" >&2
+if [[ $# -ne 2 ]]; then
+  echo "Usage: $0 <domain> <email>" >&2
   exit 1
 fi
 DOMAIN_RAW="$1"
 EMAIL_ARG="$2"
-DEV_USER_RAW="$3"
+DEV_USER="odoo"
 
 # ==========================================================================
 # color detection
@@ -93,14 +93,13 @@ abs_path() {
 # normalize inputs
 # ==========================================================================
 DOMAIN="$(to_key "$DOMAIN_RAW")"               # example.com -> examplecom
-DEV_USER="$(printf "%s" "$DEV_USER_RAW" | tr '[:upper:]' '[:lower:]')"
 SUFFIX="$(rand_suffix)"
 DB_USER="u_${DOMAIN}_${SUFFIX}"
 DB_NAME="db_${DOMAIN}_${SUFFIX}"
 DB_PASS="$(gen_passphrase)"
 PROJECT_DIR="${DOMAIN_RAW}"                    # folder name kept as raw domain
 PROJ_PATH="/home/${DEV_USER}/${PROJECT_DIR}"
-REQ_FILE="/opt/odoo/18/ce/requirements.txt"
+REQ_FILE="/home/odoo/ce/requirements.txt"
 
 CONFIG_SCRIPT="$(abs_path ./odoo-config.sh)"
 SERVICE_SCRIPT="$(abs_path ./odoo-service.sh)"
@@ -126,7 +125,6 @@ step "Inputs"
 kv "Domain (raw)" "$DOMAIN_RAW"
 kv "Domain (key)" "$DOMAIN"
 kv "Email"        "$EMAIL_ARG"
-kv "Dev user"     "$DEV_USER"
 kv "DB user"      "$DB_USER"
 kv "DB name"      "$DB_NAME"
 
@@ -212,7 +210,7 @@ ok "odoo.conf created at ${PROJ_PATH}/odoo.conf"
 # ==========================================================================
 step "Initialize Odoo database (base,web)"
 as_dev "cd ~/${PROJECT_DIR} && export PATH=\"\$HOME/.local/bin:\$PATH\"; \
-  PIPENV_VENV_IN_PROJECT=1 pipenv run /opt/odoo/18/ce/odoo-bin -c odoo.conf -i base,web --stop-after-init"
+  PIPENV_VENV_IN_PROJECT=1 pipenv run /home/odoo/ce/odoo-bin -c odoo.conf -i base,web --stop-after-init"
 ok "Odoo init completed"
 
 # ==========================================================================
@@ -221,7 +219,7 @@ ok "Odoo init completed"
 step "Create & start systemd service"
 chmod +x "$SERVICE_SCRIPT" || true
 info "Creating service via ${SERVICE_SCRIPT}"
-bash "$SERVICE_SCRIPT" "${DOMAIN_RAW}" "${DEV_USER}" --odoo-root /opt/odoo/18/ce
+bash "$SERVICE_SCRIPT" "${DOMAIN_RAW}" "${DEV_USER}" --odoo-root /home/odoo/ce
 info "Reload systemd and enable/start ${DOMAIN_RAW}.service"
 systemctl daemon-reload
 systemctl enable "${DOMAIN_RAW}.service"

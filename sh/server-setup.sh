@@ -154,11 +154,34 @@ apt install -y /tmp/wkhtmltox.deb
 rm /tmp/wkhtmltox.deb
 
 # -------------------------------------------------------------------
+# 13.5. Setup Swap Space
+# -------------------------------------------------------------------
+print_green ">>> Setting up swap space..."
+# Check if swap already exists
+if swapon --show | grep -q "/swapfile"; then
+  print_green ">>> Swap file already exists, skipping..."
+else
+  # Create 2GB swap file (adjust size as needed)
+  fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=4096
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  
+  # Make it persistent
+  if ! grep -q "/swapfile" /etc/fstab; then
+    echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  fi
+  
+  print_green ">>> Swap space configured (2GB)"
+fi
+
+# -------------------------------------------------------------------
 # 14. Clone Odoo Community Edition & install Python requirements
 # -------------------------------------------------------------------
 odoo18_path() {
   # detect common Odoo 18 install dirs; echo the first match
   local candidates=(
+    "/home/odoo"
     "/opt/odoo/18"
     "/opt/odoo18"
     "/opt/odoo/odoo18"
@@ -176,32 +199,37 @@ odoo18_path() {
   return 1
 }
 
+if ! id -u odoo >/dev/null 2>&1; then
+  print_green ">>> Creating odoo user..."
+  useradd -m -s /bin/bash odoo
+fi
+
 ODOO_FOUND="$(odoo18_path || true)"
 if [[ -n "${ODOO_FOUND}" ]]; then
   echo "==> Odoo 18 detected at '${ODOO_FOUND}' — skipping ./server-setup.sh"
 else
   print_green ">>> Cloning Odoo 18.0 CE and installing Python requirements..."
-  git clone -b "18.0" --single-branch --depth 1 https://github.com/odoo/odoo.git /opt/odoo/18/ce
-  git clone -b "18.0" https://github.com/odoo/design-themes.git /opt/odoo/18/themes
-  git clone -b "18.0" https://github.com/OCA/web.git /opt/odoo/18/oca-web
-  git clone -b "18.0" https://github.com/OCA/server-brand.git /opt/odoo/18/oca-serverbrand
-  git clone -b "18.0" https://github.com/OCA/website.git /opt/odoo/18/oca-website
-  git clone -b "18.0" https://github.com/OCA/manufacture.git /opt/odoo/18/oca-mrp
-  git clone -b "18.0" https://github.com/OCA/product-attribute.git /opt/odoo/18/oca-productattribute
-  git clone -b "18.0" https://github.com/OCA/project.git /opt/odoo/18/oca-project
-  git clone -b "18.0" https://github.com/OCA/server-tools.git /opt/odoo/18/oca-servertools
-  git clone -b "18.0" https://github.com/OCA/crm.git /opt/odoo/18/oca-crm
-  git clone -b "18.0" https://github.com/OCA/queue.git /opt/odoo/18/oca-queue
-  git clone -b "18.0" https://github.com/OCA/e-commerce.git /opt/odoo/18/oca-ecommerce
-  git clone -b "18.0" https://github.com/OCA/knowledge.git /opt/odoo/18/oca-knowledge
-  git clone -b "18.0" https://github.com/koderstory/odoo-addons /opt/odoo/18/odoo-addons
+  git clone -b "18.0" --single-branch --depth 1 https://github.com/odoo/odoo.git /home/odoo/ce
+  git clone -b "18.0" https://github.com/odoo/design-themes.git /home/odoo/themes
+  git clone -b "18.0" https://github.com/OCA/web.git /home/odoo/oca-web
+  git clone -b "18.0" https://github.com/OCA/server-brand.git /home/odoo/oca-serverbrand
+  git clone -b "18.0" https://github.com/OCA/website.git /home/odoo/oca-website
+  git clone -b "18.0" https://github.com/OCA/manufacture.git /home/odoo/oca-mrp
+  git clone -b "18.0" https://github.com/OCA/product-attribute.git /home/odoo/oca-productattribute
+  git clone -b "18.0" https://github.com/OCA/project.git /home/odoo/oca-project
+  git clone -b "18.0" https://github.com/OCA/server-tools.git /home/odoo/oca-servertools
+  git clone -b "18.0" https://github.com/OCA/crm.git /home/odoo/oca-crm
+  git clone -b "18.0" https://github.com/OCA/queue.git /home/odoo/oca-queue
+  git clone -b "18.0" https://github.com/OCA/e-commerce.git /home/odoo/oca-ecommerce
+  git clone -b "18.0" https://github.com/OCA/knowledge.git /home/odoo/oca-knowledge
+  git clone -b "18.0" https://github.com/koderstory/odoo-addons /home/odoo/odoo-addons
 fi
 
 # # -------------------------------------------------------------------
 # # 15. Symlink odoo-bin into PATH
 # # -------------------------------------------------------------------
 # print_green ">>> Creating symlink for odoo-bin into /usr/local/bin..."
-# ln -sf /opt/odoo/18/ce/odoo-bin /usr/local/bin/odoo-bin
+# ln -sf /home/odoo/ce/odoo-bin /usr/local/bin/odoo-bin
 
 # -------------------------------------------------------------------
 # All done
